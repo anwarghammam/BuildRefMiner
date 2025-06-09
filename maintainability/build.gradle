@@ -1,0 +1,19 @@
+if (project.hasProperty('release')) {
+    if (project.release == 'true') {
+        println 'Building in release mode'
+    } else {
+        println 'Building in debug mode'
+    }
+} else {
+    println 'Property release not set, defaulting to debug mode'
+}
+
+task hello {
+    doLast {
+        println 'Hello, Gradle!'
+    }
+}
+
+if (gradle.startParameter.taskNames.contains('clean')) {
+    println 'Cleaning build directory'
+}
