@@ -42,3 +42,31 @@ SCS = (1 - V / LOC) * 100
 ```
 Maintainability = f(Complexity, Coupling, Cohesion, Dependency Quality)
 ```
+
+
+---
+
+### Coupling
+
+```
+SCS = (1 - V / LOC) * 100
+```
+
+- `V` = (number of lines containing violations)  
+- `LOC` = Lines of Code
+
+---
+
+
+---
+
+### Cohesion
+
+```
+SCS = (1 - V / LOC) * 100
+```
+
+- `V` = (number of lines containing violations)  
+- `LOC` = Lines of Code
+
+---
