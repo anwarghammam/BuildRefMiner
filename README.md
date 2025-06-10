@@ -6,8 +6,10 @@
 A weighted formula:
 
 ```
-Complexity = w₁ * (1 / CC) + w₂ * (1 / AC) + w₃ * SCS 
-           + w₄ * (CR / (Comment Lines / Total Lines)) 
+Complexity = w₁ * (1 / CC)
+           + w₂ * (1 / HC)
+           + w₃ * SCS 
+           + w₄ * CR    
            + w₅ * (1 / log(LOC + 2)) 
            + w₆ * (1 - UDR) 
            + w₇ * (1 - DCR)
@@ -15,9 +17,9 @@ Complexity = w₁ * (1 / CC) + w₂ * (1 / AC) + w₃ * SCS
 
 **Where:**
 - `CC` = Cyclomatic Complexity  
-- `AC` = (Possibly Abstract Complexity)  
-- `SCS` = Source Code Simplicity  
-- `CR` = Comment Ratio  
+- `AC` = Halsted Complexity
+- `SCS` = % of lines following style.   (1- V/LOC)  
+- `CR` = Comment Ratio   (Comment Lines / Total Lines))  
 - `LOC` = Lines of Code  
 - `UDR` = Unused Dependency Ratio  
 - `DCR` = Dependency Conflict Ratio  
