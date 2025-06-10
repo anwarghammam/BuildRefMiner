@@ -18,7 +18,7 @@ Complexity = w₁ * (1 / CC)
 **Where:**
 - `CC` = Cyclomatic Complexity  
 - `AC` = Halsted Complexity
-- `SCS` = % of lines following style.   (1- V/LOC)  
+- `SCS` = % of lines following style. 
 - `CR` = Comment Ratio   (Comment Lines / Total Lines))  
 - `LOC` = Lines of Code  
 - `UDR` = Unused Dependency Ratio  
@@ -26,13 +26,13 @@ Complexity = w₁ * (1 / CC)
 
 ---
 
-### SCS (Source Code Simplicity)
+### SCS (Style conformance)
 
 ```
 SCS = (1 - V / LOC) * 100
 ```
 
-- `V` = (Possibly number of violations or unused elements)  
+- `V` = (number of lines containing violations)  
 - `LOC` = Lines of Code
 
 ---
