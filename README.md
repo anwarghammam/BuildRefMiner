@@ -1,5 +1,5 @@
 
-# 1. Build Metrics *
+# 1. Build Metrics
 
 ## Complexity
 
