@@ -17,7 +17,7 @@ Complexity = w₁ * (1 / CC)
 
 **Where:**
 - `CC` = Cyclomatic Complexity  
-- `AC` = Halsted Complexity
+- `HC` = Halsted Complexity
 - `SCS` = % of lines following style. 
 - `CR` = Comment Ratio   (Comment Lines / Total Lines))  
 - `LOC` = Lines of Code  
