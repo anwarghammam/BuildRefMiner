@@ -11,8 +11,6 @@ Complexity = w₁ * (1 / CC)
            + w₃ * SCS 
            + w₄ * CR    
            + w₅ * (1 / log(LOC + 2)) 
-           + w₆ * (1 - UDR) 
-           + w₇ * (1 - DCR)
 ```
 
 **Where:**
