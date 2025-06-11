@@ -308,8 +308,70 @@ task archive {
 
 ## 3- Code Duplication
 
-```
-CodeDuplication = \frac{\text{DLOC}}{\text{LOC}} 
-```
+
+## 🌐 Definition
+
+**Code duplication** in build systems refers to identical or near-identical logic repeated across build configuration files. This could include repeated tasks, dependencies, or configuration blocks.
+
+Excessive duplication increases maintenance overhead, makes debugging harder, and reduces the modularity and quality of the build script.
+
 ---
+
+## 🔢 Code Duplication Metric (CDM)
+
+```math
+CDM = \frac{\text{Total Duplicated Lines}}{\text{Total Significant Lines}}
+```
+
+### Where:
+
+- **Duplicated Lines**: Lines that appear in multiple places (identical or semantically similar).
+- **Significant Lines**: All lines excluding comments, whitespace, and boilerplate.
+
+A high CDM indicates high redundancy and poor maintainability.
+
+---
+
+## 🎓 Example (Gradle)
+
+```groovy
+task cleanTemp {
+    doLast {
+        delete "$buildDir/temp"
+    }
+}
+
+task cleanCache {
+    doLast {
+        delete "$buildDir/temp"
+    }
+}
+```
+
+- Here, both tasks perform the same logic.
+- This duplication could be avoided by reusing a shared method or task.
+
+---
+
+## 📚 Example (Maven)
+
+```xml
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-compiler-plugin</artifactId>
+    <version>3.8.1</version>
+</plugin>
+<!-- Repeated again in another profile -->
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-compiler-plugin</artifactId>
+    <version>3.8.1</version>
+</plugin>
+```
+
+- Plugin configuration repeated across profiles or executions is a form of duplication.
+
+
+
+
 
