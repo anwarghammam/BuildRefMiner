@@ -46,7 +46,7 @@ Maintainability = f(Complexity, Coupling, Cohesion, Dependency Quality)
 
 ---
 
-# 3- Coupling and Cohesion Metrics
+## 3- Coupling and Cohesion Metrics
 
 ## 🧹 1. Gradle
 
