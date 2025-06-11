@@ -1,7 +1,7 @@
 
-# 1. Build Metrics
+# Build Metrics
 
-## Complexity
+## 1- Complexity
 
 A weighted formula:
 
@@ -37,7 +37,7 @@ SCS = (1 - V / LOC) * 100
 
 ---
 
-## Maintainability
+## 2- Maintainability
 
 ```
 Maintainability = f(Complexity, Coupling, Cohesion, Dependency Quality)
@@ -46,7 +46,7 @@ Maintainability = f(Complexity, Coupling, Cohesion, Dependency Quality)
 
 ---
 
-# Coupling and Cohesion Metrics in Build Systems (Gradle, Maven, Ant)
+# 3- Coupling and Cohesion Metrics in Build Systems (Gradle, Maven, Ant)
 
 ## 🧹 1. Gradle
 
