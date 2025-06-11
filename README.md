@@ -446,3 +446,34 @@ SM = 1 - (1 + 1 + 0 + 0) / 3 = 1 - 2/3 = 0.33
 
 ---
 
+# ⏱️ Build Run Time (BRT) Metric
+
+## 🧬 Definition
+
+**Build Run Time (BRT)** refers to the total time taken to execute a full build process from start to finish. This includes:
+
+- Dependency resolution
+- Compilation
+- Testing
+- Packaging
+- Any custom build steps (e.g., signing, deployment)
+
+BRT is a key performance metric to evaluate the efficiency and responsiveness of build systems such as Gradle, Maven, and Ant.
+
+---
+
+## 🧮 Metric Formula
+
+```math
+BRT = \text{End Time} - \text{Start Time}
+```
+
+- **Start Time**: Timestamp when the build begins
+- **End Time**: Timestamp when the build completes
+
+### Units:
+- Measured in **seconds** or **milliseconds** depending on the granularity
+
+A lower BRT is desirable and indicates a more efficient build configuration.
+
+---
