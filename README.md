@@ -211,3 +211,24 @@ Cohesion = \frac{\text{# of Internally Related Pairs}}{\text{Total Possible Pair
 - Related pairs: Shared variables, inter-task/target/plugin execution  
 - Total pairs: \( \frac{n(n - 1)}{2} \) for `n` tasks/targets/executions
 
+ Unified Reference Types
+
+We can define references under two categories:
+
+🔹 External References (counted in numerator):
+	•	Imported scripts or modules (Gradle apply from, Ant <import>, Maven <parent>)
+	•	External plugins or taskdefs
+	•	External dependencies (libraries, classes, modules)
+	•	External property files or property inheritance
+
+🔸 Total References (counted in denominator):
+	•	All of the above, plus:
+	•	Local tasks/targets/plugins
+	•	Internal dependsOn or depends
+	•	Internal property and variable usages
+
+⸻
+
+🧮 Coupling Metric (Unified):
+
+Coupling = \frac{\text{# of External References}}{\text{Total References}}
