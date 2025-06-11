@@ -23,7 +23,6 @@ Complexity = w₁ * (1 / CC)
 - `LOC` = Lines of Code  
 - `UDR` = Unused Dependency Ratio  
 - `DCR` = Dependency Conflict Ratio  
-
 ---
 
 ### SCS (Style conformance)
