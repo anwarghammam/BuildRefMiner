@@ -304,3 +304,12 @@ task archive {
 > *Note: More shared variables or inter-task dependencies would increase cohesion.*
 
 
+---
+
+## 3- Code Duplication
+
+```
+CodeDuplication = \frac{\text{DLOC}}{\text{LOC}} 
+```
+---
+
