@@ -1,5 +1,5 @@
 
-# Build Metrics
+# Build Metrics (Gradle, Maven, Ant)
 
 ## 1- Complexity
 
@@ -46,7 +46,7 @@ Maintainability = f(Complexity, Coupling, Cohesion, Dependency Quality)
 
 ---
 
-# 3- Coupling and Cohesion Metrics in Build Systems (Gradle, Maven, Ant)
+# 3- Coupling and Cohesion Metrics
 
 ## 🧹 1. Gradle
 
