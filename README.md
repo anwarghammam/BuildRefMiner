@@ -35,6 +35,18 @@ SCS = (1 - V / LOC) * 100
 - `LOC` = Lines of Code
 
 ---
+## 2- Dependency Quality
+
+A weighted formula:
+
+```
+ w₁ * (1 - UDR) + w₂ * (1 - DCR)
+```
+
+**Where:**
+- `UDR` = Unused Dependency Ratio  
+- `DCR` = Dependency Conflict Rat
+---
 
 ## 2- Maintainability
 
