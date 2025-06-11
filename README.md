@@ -371,7 +371,15 @@ task cleanCache {
 
 - Plugin configuration repeated across profiles or executions is a form of duplication.
 
+---
 
+## 🔍 Detection Methods
+
+- **AST-Based Clone Detection**: Normalize and parse the Abstract Syntax Tree of build files to detect structure-level clones.
+- **Token-Based Detection**: Count repeated blocks of tokens or lines.
+- **Semantic Detection**: Identify logically equivalent code even if written differently.
+
+---
 
 
 
