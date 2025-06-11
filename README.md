@@ -216,12 +216,16 @@ Cohesion = \frac{\text{# of Internally Related Pairs}}{\text{Total Possible Pair
 We can define references under two categories:
 
 🔹 External References (counted in numerator):
+
+
 	•	Imported scripts or modules (Gradle apply from, Ant <import>, Maven <parent>)
 	•	External plugins or taskdefs
 	•	External dependencies (libraries, classes, modules)
 	•	External property files or property inheritance
 
 🔸 Total References (counted in denominator):
+
+
 	•	All of the above, plus:
 	•	Local tasks/targets/plugins
 	•	Internal dependsOn or depends
@@ -232,3 +236,77 @@ We can define references under two categories:
 🧮 Coupling Metric (Unified):
 
 Coupling = \frac{\text{# of External References}}{\text{Total References}}
+
+
+
+
+
+# ✨ What is Cohesion?
+
+**Cohesion** refers to how closely related and interconnected different parts of a build script are. In Gradle, this typically means analyzing how tasks, variables, plugins, and configuration blocks relate to one another.
+
+---
+
+## ✅ Elements Contributing to Cohesion in Gradle
+
+| Element                        | Contributes to Cohesion? | Explanation |
+|-------------------------------|---------------------------|-------------|
+| **Tasks**                     | ✅                        | Tasks that depend on each other or use shared logic/variables. |
+| **Shared Variables (`ext`)**  | ✅                        | When defined variables (e.g., `ext.outputDir`) are used by multiple tasks. |
+| **Common Configuration Blocks** | ✅                      | Settings reused across multiple plugins/tasks. |
+| **Plugin Configurations**     | ✅                        | Plugins that configure multiple build components similarly. |
+| **Custom Functions/Methods**  | ✅                        | Reusable logic used in different script sections. |
+| **Internal Property References** | ✅                    | Use of project-level values (`buildDir`, `version`) across multiple places. |
+
+---
+
+## ❌ What Does NOT Contribute to Cohesion
+
+| Element                   | Reason |
+|---------------------------|--------|
+| **Isolated Tasks**        | No shared dependencies, variables, or logic. |
+| **Independent Blocks**    | Defined elements that don’t interact with others. |
+| **Unused `ext` Properties** | Declared but not used elsewhere. |
+
+---
+
+## 🧰 Cohesion Metric Formula (Refined)
+
+```math
+Cohesion = \frac{\text{# of Related Element Pairs}}{\text{Total Element Pairs}}
+```
+
+Where:
+- **Element** = tasks, configuration blocks, variables, plugin configurations
+- **Related Pair** = two elements that share a variable, logic, or have a task dependency
+- **Total Pairs** = \( \frac{n(n-1)}{2} \), for `n` elements considered
+
+---
+
+## 📅 Example
+
+```groovy
+ext.outputDir = "$buildDir/custom"
+
+task compile {
+    doLast {
+        println outputDir
+    }
+}
+
+task archive {
+    dependsOn compile
+    doLast {
+        println outputDir
+    }
+}
+```
+
+- **Elements**: `compile`, `archive`, `outputDir`
+- **Related Pairs**: `compile-archive` (shared variable + dependency)
+- **Total Pairs**: 3
+- **Cohesion** = 1 / 3 ≈ **0.33** (if counting only 1 strong relation)
+
+> *Note: More shared variables or inter-task dependencies would increase cohesion.*
+
+
