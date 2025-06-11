@@ -189,12 +189,6 @@ Coupling = \frac{\text{# of External Imports}}{\text{Total Task References}}
 - Use of shared properties
 - Sequential usage of common files or paths
 
-**Metric Formula:**
-```math
-Cohesion = \frac{\text{# of Dependent Targets}}{\text{Total Target Pairs}}
-```
-
----
 
 ## 🔁 Unified Metric for All Build Systems
 
