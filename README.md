@@ -381,5 +381,68 @@ task cleanCache {
 
 ---
 
+# 🧬 Definition
 
+Security in build systems refers to the extent to which the build configuration protects the software from introducing vulnerabilities via:
+
+- Insecure or outdated dependencies
+- Use of scripts or plugins from untrusted sources
+- Hardcoded credentials or sensitive information
+- Missing integrity verification (e.g., checksums)
+
+---
+
+## 🖐️ Proposed Security Metric (SM)
+
+```math
+SM = 1 - \left( \frac{V + H + T + M}{N} \right)
+```
+
+### Where:
+
+- `V`: Number of known vulnerable dependencies
+- `H`: Number of hardcoded secrets (tokens, passwords, etc.)
+- `T`: Number of third-party plugins used without verification (e.g., from unknown repositories)
+- `M`: Number of misconfigurations (e.g., unsigned artifacts, skipped verifications)
+- `N`: Total number of build components scanned
+
+The result is normalized between 0 (insecure) and 1 (fully secure).
+
+---
+
+## 🧪 Examples
+
+### Example 1: Gradle
+
+```groovy
+dependencies {
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.9.0'  // vulnerable version
+}
+
+ext.token = "hardcoded-secret-token"
+```
+
+Violations:
+
+- 1 vulnerable dependency (`V = 1`)
+- 1 hardcoded secret (`H = 1`)
+- 0 third-party unverified (`T = 0`)
+- 0 misconfigurations (`M = 0`)
+- `N = 3`
+
+Security Metric:
+
+```math
+SM = 1 - (1 + 1 + 0 + 0) / 3 = 1 - 2/3 = 0.33
+```
+
+---
+
+## 🔍 Detection Tools
+
+- **Dependency Scanners**: OWASP Dependency-Check, Snyk, OSS Index
+- **Secret Scanners**: TruffleHog, GitLeaks
+- **Lint Rules**: Custom Gradle or Maven linters to detect insecure configurations
+
+---
 
