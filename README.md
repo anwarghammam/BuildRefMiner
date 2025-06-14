@@ -486,3 +486,72 @@ BRT = \text{End Time} - \text{Start Time}
 A lower BRT is desirable and indicates a more efficient build configuration.
 
 ---
+
+
+# 📘 Halstead Complexity Metric: Operator and Operand Definitions for Build Systems
+
+This document describes how **operators** and **operands** are identified for computing Halstead Complexity in three build systems: **Gradle**, **Maven**, and **Ant**.
+
+---
+
+## 🔧 Gradle (Groovy DSL)
+
+- **Operators**: 
+  - All Groovy method calls (e.g., `task`, `doLast`, `println`)
+  - Binary expressions (`=`, `==`, etc.)
+  - Control structures like `if`, `else`, and method declarations
+
+- **Operands**:
+  - Constants or string values passed to method calls (e.g., `"Hello, Gradle!"`)
+  - Variable and property names (e.g., `release`, `project.release`)
+  - Any identifiers involved in assignments or expressions
+
+> **Note**: The Groovy AST is traversed to extract all relevant operator and operand nodes.
+
+---
+
+## 🧩 Maven (XML-based POM)
+
+- **Operators**:
+  - All XML tags, such as `<project>`, `<build>`, `<plugin>`, `<execution>`, etc.
+
+- **Operands**:
+  - All **child tags** of the operator tags (excluding empty or purely structural tags)
+  - Text or values enclosed within tags (e.g., `1.0-SNAPSHOT` inside `<version>`)
+
+> **Example**: In `<plugin><artifactId>maven-compiler-plugin</artifactId></plugin>`, `<plugin>` is an operator and `<artifactId>` is an operand.
+
+---
+
+## 🛠️ Ant (XML-based)
+
+- **Operators**:
+  - Any `<target>` or task tag (e.g., `<mkdir>`, `<javac>`, `<delete>`, `<echo>`)
+  - Control attribute-based logic such as `depends`, `if`, `unless`
+
+- **Operands**:
+  - Parameter values passed to tasks, excluding `"name"` in `<target name="...">`
+  - Attributes of task elements (e.g., `dir`, `srcdir`, `destdir`)
+
+> **Example**: In `<javac srcdir="${src.dir}" destdir="${build.dir}"/>`, `javac` is an operator and `src.dir`, `build.dir` are operands.
+
+---
+
+## 📏 Formula (All Build Systems)
+
+The Halstead Volume is calculated as:
+
+```
+n1 = number of unique operators
+n2 = number of unique operands
+N1 = total number of operators
+N2 = total number of operands
+
+Vocabulary = n1 + n2
+Length     = N1 + N2
+Volume     = Length * log2(Vocabulary)
+```
+
+---
+
+
