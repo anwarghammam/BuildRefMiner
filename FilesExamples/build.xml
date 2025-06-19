@@ -1,0 +1,25 @@
+<project name="ExampleProject" default="compile" basedir=".">
+    
+    <property name="src.dir" value="src"/>
+    <property name="build.dir" value="build"/>
+
+    <target name="init">
+        <mkdir dir="${build.dir}"/>
+    </target>
+
+    <target name="compile" depends="init" if="src.dir">
+        <javac srcdir="${src.dir}" destdir="${build.dir}"/>
+    </target>
+
+    <target name="clean" unless="skip.clean">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <target name="run">
+        <condition property="can.run">
+            <available file="${build.dir}/Main.class"/>
+        </condition>
+        <echo message="Ready to run."/>
+    </target>
+
+</project>

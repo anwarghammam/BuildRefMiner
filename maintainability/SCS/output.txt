@@ -1,0 +1,30 @@
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+CodeNarc Report - Jun 19, 2025, 6:11:21 PM
+
+Summary: TotalFiles=2 FilesWithViolations=2 P1=0 P2=10 P3=7
+
+File: TestScript.groovy
+    Violation: Rule=MethodName P=2 Line=3 Msg=[Violation in class BadStyleClass. The method name BadMethodName in class BadStyleClass does not match [a-z]\w*] Src=[def BadMethodName() {]
+    Violation: Rule=CyclomaticComplexity P=2 Line=3 Msg=[Violation in class BadStyleClass. The cyclomatic complexity for method [BadMethodName] is [1]] Src=[def BadMethodName() {]
+    Violation: Rule=VariableName P=2 Line=4 Msg=[Variable named VeryLongVariableNameThatExceedsNormalConvention in class BadStyleClass does not match the pattern [a-z][a-zA-Z0-9]*] Src=[def VeryLongVariableNameThatExceedsNormalConvention = "value" // VariableName]
+    Violation: Rule=CyclomaticComplexity P=2 Line=10 Msg=[Violation in class BadStyleClass. The cyclomatic complexity for method [methodWithTooManyParameters] is [1]] Src=[def methodWithTooManyParameters(p1, p2, p3, p4, p5, p6) { // ParameterName]
+    Violation: Rule=ClassSize P=3 Line=1 Msg=[Class "BadStyleClass" is 13 lines]
+    Violation: Rule=MethodSize P=3 Line=3 Msg=[Method "BadMethodName" is 4 lines]
+    Violation: Rule=MethodSize P=3 Line=10 Msg=[Method "methodWithTooManyParameters" is 3 lines]
+
+File: build.gradle
+    Violation: Rule=CyclomaticComplexity P=2 Line=3 Msg=[Violation in class BuildScriptSimulation. The cyclomatic complexity for method [exampleMethodWithBadName] is [1]] Src=[def exampleMethodWithBadName() { // Violates MethodName rule]
+    Violation: Rule=VariableName P=2 Line=4 Msg=[Variable named VeryLongVariableNameThatExceedsNormalConvention in class BuildScriptSimulation does not match the pattern [a-z][a-zA-Z0-9]*] Src=[def VeryLongVariableNameThatExceedsNormalConvention = "This is a long variable name" // Violates VariableName]
+    Violation: Rule=LineLength P=2 Line=5 Msg=[The line exceeds 120 characters. The line is 176 characters.] Src=[        println "This is a very long line that is intentionally written to exceed the maximum allowed length of 120 characters, just to trigger the LineLength rule in CodeNarc"]
+    Violation: Rule=ClassName P=2 Line=12 Msg=[The name BuildScriptSimulation$bad_class_name failed to match the pattern ([A-Z]\w*\$?)*] Src=[class bad_class_name { // Violates ClassName rule]
+    Violation: Rule=LineLength P=2 Line=15 Msg=[The line exceeds 120 characters. The line is 127 characters.] Src=[        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule]
+    Violation: Rule=CyclomaticComplexity P=2 Line=15 Msg=[Violation in class BuildScriptSimulation$bad_class_name. The cyclomatic complexity for method [methodWithTooManyParameters] is [1]] Src=[def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule]
+    Violation: Rule=ClassSize P=3 Line=1 Msg=[Class "BuildScriptSimulation" is 19 lines]
+    Violation: Rule=MethodSize P=3 Line=3 Msg=[Method "exampleMethodWithBadName" is 8 lines]
+    Violation: Rule=ClassSize P=3 Line=12 Msg=[Class "BuildScriptSimulation$bad_class_name" is 7 lines]
+    Violation: Rule=MethodSize P=3 Line=15 Msg=[Method "methodWithTooManyParameters" is 3 lines]
+
+[CodeNarc (https://codenarc.org) v3.3.0]
+CodeNarc completed: (p1=0; p2=10; p3=7) 427ms

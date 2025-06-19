@@ -1,0 +1,19 @@
+class BuildScriptSimulation {
+
+    def exampleMethodWithBadName() { // Violates MethodName rule
+        def VeryLongVariableNameThatExceedsNormalConvention = "This is a long variable name" // Violates VariableName
+        println "This is a very long line that is intentionally written to exceed the maximum allowed length of 120 characters, just to trigger the LineLength rule in CodeNarc"
+
+        (1..60).each { i -> // Violates MethodSize rule
+            println "Line $i"
+        }
+    }
+
+    class bad_class_name { // Violates ClassName rule
+        String BAD_FIELD_NAME = "oops" // Violates FieldName rule
+
+        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule
+            println BAD_FIELD_NAME
+        }
+    }
+}
