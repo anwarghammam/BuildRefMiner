@@ -26,10 +26,10 @@ Complexity = w₁ * (1 / CC)
 ### SCS (Style conformance)
 
 ```
-SCS = (1 - V / LOC) * 100
+SCS = 1 - (V / LOC) 
 ```
 
-- `V` = (number of lines containing violations)  
+- `V` = (number of violations)  
 - `LOC` = Lines of Code
 
 ---
