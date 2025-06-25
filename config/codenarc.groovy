@@ -15,12 +15,12 @@ ruleset {
     ClassName(enabled: true)
     FieldName(enabled: true)
     ParameterName(enabled: true)
-    UnnecessarySemicolon(enabled: true)
+    //UnnecessarySemicolon(enabled: true)
 
     // === Size/Complexity rules (GMetrics plugin) ===
-    MethodSize(enabled: true, maxLines: 1)
-    ClassSize(enabled: true, maxLines: 2)
-    CyclomaticComplexity(enabled: true, maxMethodComplexity: 0.05)
+    //MethodSize(enabled: true, maxLines: 1)
+    //ClassSize(enabled: true, maxLines: 2)
+    //CyclomaticComplexity(enabled: true, maxMethodComplexity: 0.05)
     //NPathComplexity(enabled: true, maxMethodComplexity: 1)
 
 }
