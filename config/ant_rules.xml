@@ -1,0 +1,64 @@
+<ruleset name="Ant Rules"
+         xmlns="https://pmd.github.io/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://pmd.github.io/ruleset/2.0.0
+                             https://pmd.github.io/ruleset_2_0_0.xsd">
+
+  <description>PMD 7-compatible XPath rule for Ant build files</description>
+
+  <rule name="TooManyTasks"
+        language="xml"
+        message="Target has too many tasks (more than 3)."
+        class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+    <priority>3</priority>
+    <properties>
+      <property name="xpath">
+        <value>
+          //target[count(*) &gt; 3]
+        </value>
+      </property>
+    </properties>
+  </rule>
+
+<rule name="NoEmptyTargets"
+      language="xml"
+      message="Target should not be empty."
+      class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+  <priority>3</priority>
+  <properties>
+    <property name="xpath">
+      <value>
+        //target[count(*) = 0]
+      </value>
+    </property>
+  </properties>
+</rule>
+
+  <rule name="NoDuplicateTargets"
+        language="xml"
+        message="Target should not be defined more than once."
+        class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+    <priority>3</priority>
+    <properties>
+      <property name="xpath">
+        <value>
+          //target[count(ancestor::project/target[@name = current()/@name]) &gt; 1]
+        </value>
+      </property>
+    </properties>
+  </rule>
+
+  <rule name="NoEmptyProperties"
+        language="xml"
+        message="Property should not be empty."
+        class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+    <priority>3</priority>
+    <properties>
+      <property name="xpath">
+        <value>
+          //property[@value = '']
+        </value>
+      </property>
+    </properties>
+  </rule>
+</ruleset>
