@@ -7,6 +7,13 @@ class BuildScriptSimulation {
         (1..60).each { i -> // Violates MethodSize rule
             println "Line $i"
         }
+
+        /*
+        This is a multi-line comment
+        spanning multiple lines
+        It should be ignored by the BLOC analyzer
+        */
+        println "End of method"
     }
 
     class bad_class_name { // Violates ClassName rule

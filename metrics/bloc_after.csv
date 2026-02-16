@@ -1,0 +1,88 @@
+File,Content After Processing,BLOC
+../FilesExamples/build.xml,"<project name=""ExampleProject"" default=""compile"" basedir=""."">
+    
+    
+    <property name=""src.dir"" value=""src""/>
+    <property name=""build.dir"" value=""build""/>
+
+    
+    <target name=""init"">
+        <mkdir dir=""${build.dir}""/>
+    </target>
+
+    <target name=""compile"" depends=""init"" if=""src.dir"">
+        <javac srcdir=""${src.dir}"" destdir=""${build.dir}""/>
+    </target>
+
+    
+    <target name=""clean"" unless=""skip.clean"">
+        <delete dir=""${build.dir}""/>
+    </target>
+
+    <target name=""run"">
+        <condition property=""can.run"">
+            <available file=""${build.dir}/Main.class""/>
+        </condition>
+        <echo message=""Ready to run.""/>
+    </target>
+
+</project>
+",19
+../FilesExamples/pom.xml,"<project>
+  <modelVersion>4.0.0</modelVersion>
+
+  <GroupId>com.Example</GroupId> 
+  <artifactId>My.App</artifactId> 
+  <version>1.0.0</version>
+
+  
+  <properties>
+    <Java_Version>17</Java_Version> 
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+      <version></version> 
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId> 
+      </plugin>
+    </plugins>
+  </build>
+</project>
+",29
+../FilesExamples/build.gradle,"class BuildScriptSimulation {
+
+    def exampleMethodWithBadName() { 
+        def VeryLongVariableNameThatExceedsNormalConvention = ""This is a long variable name"" 
+        println ""This is a very long line that is intentionally written to exceed the maximum allowed length of 120 characters, just to trigger the LineLength rule in CodeNarc""
+
+        (1..60).each { i -> 
+            println ""Line $i""
+        }
+
+        
+        println ""End of method""
+    }
+
+    class bad_class_name { 
+        String BAD_FIELD_NAME = ""oops"" 
+
+        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { 
+            println BAD_FIELD_NAME
+        }
+    }
+}
+",16

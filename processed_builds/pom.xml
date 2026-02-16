@@ -1,15 +1,13 @@
 <project>
   <modelVersion>4.0.0</modelVersion>
 
-  <GroupId>com.Example</GroupId> <!-- ❌ tag name is not lowercase -->
-  <artifactId>My.App</artifactId> <!-- ❌ contains dot -->
+  <GroupId>com.Example</GroupId> 
+  <artifactId>My.App</artifactId> 
   <version>1.0.0</version>
 
-  <!-- Multi-line comment
-       explaining the properties section
-       should be ignored by BLOC -->
+  
   <properties>
-    <Java_Version>17</Java_Version> <!-- ❌ uses underscore and uppercase -->
+    <Java_Version>17</Java_Version> 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -17,7 +15,7 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
-      <version></version> <!-- ❌ empty value -->
+      <version></version> 
     </dependency>
   </dependencies>
 
@@ -29,7 +27,7 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->
+        <artifactId>maven-compiler-plugin</artifactId> 
       </plugin>
     </plugins>
   </build>
