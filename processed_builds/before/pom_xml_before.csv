@@ -1,0 +1,37 @@
+Line_Number,Content
+1,<project>
+2,  <modelVersion>4.0.0</modelVersion>
+3,
+4,  <GroupId>com.Example</GroupId> <!-- ❌ tag name is not lowercase -->
+5,  <artifactId>My.App</artifactId> <!-- ❌ contains dot -->
+6,  <version>1.0.0</version>
+7,
+8,  <!-- Multi-line comment
+9,       explaining the properties section
+10,       should be ignored by BLOC -->
+11,  <properties>
+12,    <Java_Version>17</Java_Version> <!-- ❌ uses underscore and uppercase -->
+13,    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+14,  </properties>
+15,
+16,  <dependencies>
+17,    <dependency>
+18,      <groupId>org.springframework.boot</groupId>
+19,      <artifactId>spring-boot-starter-web</artifactId>
+20,      <version></version> <!-- ❌ empty value -->
+21,    </dependency>
+22,  </dependencies>
+23,
+24,  <build>
+25,    <plugins>
+26,      <plugin>
+27,        <groupId>org.apache.maven.plugins</groupId>
+28,        <artifactId>maven-compiler-plugin</artifactId>
+29,      </plugin>
+30,      <plugin>
+31,        <groupId>org.apache.maven.plugins</groupId>
+32,        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->
+33,      </plugin>
+34,    </plugins>
+35,  </build>
+36,</project>

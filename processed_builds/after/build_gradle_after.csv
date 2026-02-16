@@ -1,0 +1,27 @@
+Line_Number,Content,Type
+1,class BuildScriptSimulation {,CODE
+2,,BLANK
+3,    def exampleMethodWithBadName() { // Violates MethodName rule,CODE
+4,"        def VeryLongVariableNameThatExceedsNormalConvention = ""This is a long variable name"" // Violates VariableName",CODE
+5,"        println ""This is a very long line that is intentionally written to exceed the maximum allowed length of 120 characters, just to trigger the LineLength rule in CodeNarc""",CODE
+6,,BLANK
+7,        (1..60).each { i -> // Violates MethodSize rule,CODE
+8,"            println ""Line $i""",CODE
+9,        },CODE
+10,,BLANK
+11,        /*,CODE
+12,        This is a multi-line comment,CODE
+13,        spanning multiple lines,CODE
+14,        It should be ignored by the BLOC analyzer,CODE
+15,        */,CODE
+16,"        println ""End of method""",CODE
+17,    },CODE
+18,,BLANK
+19,    class bad_class_name { // Violates ClassName rule,CODE
+20,"        String BAD_FIELD_NAME = ""oops"" // Violates FieldName rule",CODE
+21,,BLANK
+22,"        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule",CODE
+23,            println BAD_FIELD_NAME,CODE
+24,        },CODE
+25,    },CODE
+26,},CODE
