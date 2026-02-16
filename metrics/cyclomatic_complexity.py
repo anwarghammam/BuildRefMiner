@@ -3,18 +3,16 @@ import csv
 import re
 
 # --------------------------------------------------
-# Stable Base Directory
+# Stable Paths
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
-OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
-
-SUMMARY_FILE = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
+SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
 
 
 # --------------------------------------------------
-# Decision Patterns
+# Decision Patterns for CC
 # --------------------------------------------------
 DECISION_PATTERNS = [
     r"\bif\b",
@@ -30,10 +28,10 @@ DECISION_PATTERNS = [
 
 
 # --------------------------------------------------
-# Compute CC
+# Compute Cyclomatic Complexity
 # --------------------------------------------------
 def compute_cc(lines):
-    cc = 1  # Base complexity
+    cc = 1  # Base complexity per file
 
     for line in lines:
         for pattern in DECISION_PATTERNS:
@@ -44,11 +42,11 @@ def compute_cc(lines):
 
 
 # --------------------------------------------------
-# Update Existing Summary CSV
+# Integrate CC into Existing Summary
 # --------------------------------------------------
-def update_summary_with_cc():
+def integrate_cc():
     if not os.path.exists(SUMMARY_FILE):
-        print("ERROR: summary_metrics.csv not found. Run BLOC first.")
+        print("ERROR: summary_metrics.csv not found. Run BLOC analyzer first.")
         return
 
     # Read existing summary
@@ -58,7 +56,7 @@ def update_summary_with_cc():
     header = reader[0]
     rows = reader[1:]
 
-    # Add CC column if not present
+    # Add CC column if not already present
     if "Cyclomatic_Complexity" not in header:
         header.append("Cyclomatic_Complexity")
 
@@ -75,21 +73,23 @@ def update_summary_with_cc():
         else:
             cc_value = 0
 
-        row = row[:len(header)-1]  # remove old cc if exists
+        # Ensure row length matches header before appending
+        row = row[:len(header)-1]
         row.append(cc_value)
+
         updated_rows.append(row)
 
         print(f"Updated {filename} | CC = {cc_value}")
 
-    # Write updated summary
+    # Write updated summary back
     with open(SUMMARY_FILE, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(header)
         writer.writerows(updated_rows)
 
-    print("\nCyclomatic Complexity successfully integrated into summary_metrics.csv")
+    print("\nCyclomatic Complexity successfully added to summary_metrics.csv")
 
 
 # --------------------------------------------------
 if __name__ == "__main__":
-    update_summary_with_cc()
+    integrate_cc()
