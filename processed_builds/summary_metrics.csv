@@ -1,4 +1,4 @@
 File_Name,BLOC,Cyclomatic_Complexity,Change_Frequency,Halstead_Volume
-build.xml,25,2,5,0
-pom.xml,32,1,6,0
-build.gradle,21,1,5,511
+build.xml,25,2,5,367
+pom.xml,32,1,6,276
+build.gradle,21,1,5,680

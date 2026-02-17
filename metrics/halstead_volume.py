@@ -2,6 +2,7 @@ import os
 import csv
 import xml.etree.ElementTree as ET
 import re
+import math
 
 # --------------------------------------------------
 # Paths
@@ -11,63 +12,79 @@ FILES_DIR = os.path.join(BASE_DIR, "..", "FilesExamples")
 SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
 
 # --------------------------------------------------
-# Helper functions
-# --------------------------------------------------
-
 # Halstead for XML files (Ant / Maven)
+# --------------------------------------------------
 def halstead_xml(file_path):
     try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
-        operators = set()
-        operands = set()
-        # Traverse XML
-        for elem in root.iter():
-            operators.add(elem.tag)  # tag = operator
-            for child in elem:       # child tags = operands
-                operands.add(child.tag)
-            for key, value in elem.attrib.items():  # attributes = operands
-                operands.add(key)
-        n1 = len(operators)      # unique operators
-        n2 = len(operands)       # unique operands
-        N1 = sum(1 for _ in operators)  # total operators (simplified)
-        N2 = sum(1 for _ in operands)   # total operands (simplified)
-        # Halstead Volume formula
-        if n1+n2 == 0:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        # Keep everything up to the last </project> tag to ignore non-XML content
+        end_index = content.rfind("</project>")
+        if end_index == -1:
+            print(f"ERROR: No </project> tag found in {file_path}")
             return 0
-        V = (N1+N2) * (0 if n1+n2==0 else (n1+n2).bit_length())  # simplified log2(n1+n2)
-        return int(V)
+        content = content[:end_index + len("</project>")]
+
+        root = ET.fromstring(content)
+        operators = []
+        operands = []
+
+        def traverse(elem):
+            operators.append(elem.tag)
+            for key, value in elem.attrib.items():
+                operands.append(key)
+                operands.append(value)
+            if elem.text and elem.text.strip():
+                operands.append(elem.text.strip())
+            for child in elem:
+                operands.append(child.tag)
+                traverse(child)
+
+        traverse(root)
+
+        n1 = len(set(operators))
+        n2 = len(set(operands))
+        N1 = len(operators)
+        N2 = len(operands)
+        if n1 + n2 == 0:
+            return 0
+        return int((N1 + N2) * math.log2(n1 + n2))
+
     except Exception as e:
         print(f"Error parsing XML {file_path}: {e}")
         return 0
 
+# --------------------------------------------------
 # Halstead for Gradle DSL
+# --------------------------------------------------
 def halstead_gradle(file_path):
     try:
-        operators = set()
-        operands = set()
+        operators = []
+        operands = []
         with open(file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            for line in lines:
+            for line in f:
                 line = line.strip()
                 if not line or line.startswith("//"):
                     continue
-                # Simplified: operators = keywords, method names, closures
+                # operators = keywords, method names, closures
                 op_matches = re.findall(r"\b(def|class|if|else|for|while|println|apply|plugins)\b", line)
-                operators.update(op_matches)
+                operators.extend(op_matches)
                 # operands = variable names and string literals
                 operand_matches = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", line)
                 string_matches = re.findall(r'"(.*?)"', line)
-                operands.update(operand_matches)
-                operands.update(string_matches)
-        n1 = len(operators)
-        n2 = len(operands)
-        N1 = sum(1 for _ in operators)
-        N2 = sum(1 for _ in operands)
-        if n1+n2 == 0:
+                operands.extend(operand_matches)
+                operands.extend(string_matches)
+
+        n1 = len(set(operators))
+        n2 = len(set(operands))
+        N1 = len(operators)
+        N2 = len(operands)
+
+        if n1 + n2 == 0:
             return 0
-        V = (N1+N2) * (0 if n1+n2==0 else (n1+n2).bit_length())
-        return int(V)
+
+        return int((N1 + N2) * math.log2(n1 + n2))
+
     except Exception as e:
         print(f"Error parsing Gradle {file_path}: {e}")
         return 0
@@ -93,8 +110,13 @@ def integrate_halstead():
     updated_rows = []
 
     for row in rows:
-        filename = row[0]
+        # Clean filename (remove ../FilesExamples/ prefix)
+        filename = os.path.basename(row[0])
         file_path = os.path.join(FILES_DIR, filename)
+
+        # Debug: check file path exists
+        print(f"Processing file: {file_path} → Exists: {os.path.exists(file_path)}")
+
         hv = 0
         if os.path.exists(file_path):
             if filename.endswith(".xml"):
@@ -103,6 +125,9 @@ def integrate_halstead():
                 hv = halstead_gradle(file_path)
             else:
                 hv = 0
+        else:
+            print(f"Warning: {filename} not found!")
+
         row = row[:len(header)-1]
         row.append(hv)
         updated_rows.append(row)
