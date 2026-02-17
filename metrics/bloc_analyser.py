@@ -2,37 +2,41 @@ import os
 import csv
 
 # --------------------------------------------------
-# Stable Base Directory
+# Stable Base Directory (works from anywhere)
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
 
-BEFORE_FOLDER = os.path.join(OUTPUT_FOLDER, "before")
-AFTER_FOLDER = os.path.join(OUTPUT_FOLDER, "after")
+BEFORE_FOLDER = os.path.join(OUTPUT_FOLDER, "beforebloc")  # updated folder name
+AFTER_FOLDER = os.path.join(OUTPUT_FOLDER, "afterbloc")    # updated folder name
 
+# Create output folders if they don't exist
 os.makedirs(BEFORE_FOLDER, exist_ok=True)
 os.makedirs(AFTER_FOLDER, exist_ok=True)
 
 
 # --------------------------------------------------
-# Line Classification
+# BLOC Logic
 # --------------------------------------------------
-def classify_line(line):
+def is_bloc(line):
     stripped = line.strip()
 
+    # Ignore empty lines
     if not stripped:
-        return "BLANK"
+        return 0
 
+    # Ignore single-line comments
     if stripped.startswith("//") or stripped.startswith("#"):
-        return "COMMENT"
+        return 0
 
-    return "CODE"
+    # Everything else counts as BLOC
+    return 1
 
 
 # --------------------------------------------------
-# Process File
+# Process Each File
 # --------------------------------------------------
 def process_file(filepath, summary_data):
     filename = os.path.basename(filepath)
@@ -41,16 +45,13 @@ def process_file(filepath, summary_data):
     before_path = os.path.join(BEFORE_FOLDER, f"{name_without_ext}_before.csv")
     after_path = os.path.join(AFTER_FOLDER, f"{name_without_ext}_after.csv")
 
-    total_lines = 0
-    total_blank = 0
-    total_comments = 0
     total_bloc = 0
 
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     # -------------------------
-    # BEFORE CSV
+    # Write BEFORE CSV
     # -------------------------
     with open(before_path, "w", newline="", encoding="utf-8") as before_csv:
         writer = csv.writer(before_csv)
@@ -60,49 +61,27 @@ def process_file(filepath, summary_data):
             writer.writerow([i, line.rstrip()])
 
     # -------------------------
-    # AFTER CSV
+    # Write AFTER CSV
     # -------------------------
     with open(after_path, "w", newline="", encoding="utf-8") as after_csv:
         writer = csv.writer(after_csv)
-        writer.writerow(["Line_Number", "Content", "Type"])
+        writer.writerow(["Line_Number", "Content", "Is_BLOC"])
 
         for i, line in enumerate(lines, 1):
-            total_lines += 1
-            line_type = classify_line(line)
+            bloc_flag = is_bloc(line)
+            total_bloc += bloc_flag
+            writer.writerow([i, line.rstrip(), bloc_flag])
 
-            if line_type == "BLANK":
-                total_blank += 1
-            elif line_type == "COMMENT":
-                total_comments += 1
-            else:
-                total_bloc += 1
+    summary_data.append([filename, total_bloc])
 
-            writer.writerow([i, line.rstrip(), line_type])
-
-    bloc_ratio = round(total_bloc / total_lines, 3) if total_lines > 0 else 0
-
-    summary_data.append([
-        filename,
-        total_lines,
-        total_bloc,
-        total_comments,
-        total_blank,
-        bloc_ratio
-    ])
-
-    print(f"Processed: {filename}")
-    print(f"  Total Lines: {total_lines}")
-    print(f"  BLOC: {total_bloc}")
-    print(f"  Comments: {total_comments}")
-    print(f"  Blank: {total_blank}")
-    print(f"  BLOC Ratio: {bloc_ratio}\n")
+    print(f"Processed: {filename} | Total BLOC = {total_bloc}")
 
 
 # --------------------------------------------------
-# Main
+# Main Function
 # --------------------------------------------------
 def main():
-    print("Starting Advanced BLOC Analysis...\n")
+    print("Starting BLOC Analysis...\n")
 
     if not os.path.exists(INPUT_FOLDER):
         print("ERROR: FilesExamples folder not found.")
@@ -121,20 +100,15 @@ def main():
 
     with open(summary_path, "w", newline="", encoding="utf-8") as summary_file:
         writer = csv.writer(summary_file)
-        writer.writerow([
-            "File_Name",
-            "Total_Lines",
-            "BLOC",
-            "Comment_Lines",
-            "Blank_Lines",
-            "BLOC_Ratio"
-        ])
+        writer.writerow(["File_Name", "BLOC"])
         writer.writerows(summary_data)
 
-    print("BLOC Analysis Completed.")
-    print("Summary file created at: processed_builds/summary_metrics.csv")
+    print("\nBLOC Analysis Completed.")
+    print("Check 'processed_builds/beforebloc' and 'processed_builds/afterbloc' for results.")
 
 
+# --------------------------------------------------
+# Run Script
 # --------------------------------------------------
 if __name__ == "__main__":
     main()
