@@ -9,7 +9,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_PATH = os.path.join(BASE_DIR, "..")  # root of your Git repo
 SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
 
-BUILD_FILES = ["build.gradle", "build.xml", "pom.xml"]
+# Target build files with folder path included
+BUILD_FILES = ["FilesExamples/build.gradle", "FilesExamples/build.xml", "FilesExamples/pom.xml"]
 
 # --------------------------------------------------
 # Compute Change Frequency using git log
@@ -19,9 +20,9 @@ def compute_cf(file_path):
     Counts commits modifying a file using git log
     """
     try:
-        # Run git log --name-only --pretty=oneline
+        # Run git log for the file
         result = subprocess.run(
-            ["git", "log", "--pretty=oneline", "--name-only", "--", file_path],
+            ["git", "log", "--pretty=format:%H", "--", file_path],
             cwd=REPO_PATH,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -30,12 +31,7 @@ def compute_cf(file_path):
         output = result.stdout.strip()
         if not output:
             return 0
-        # Count commits (each commit has at least one line with hash)
-        # We count commits by splitting on empty lines between commit hashes
-        commits = set()
-        for line in output.split("\n"):
-            if line.strip() and not line.startswith(" "):
-                commits.add(line.strip().split()[0])
+        commits = output.split("\n")
         return len(commits)
     except Exception as e:
         print(f"Error computing CF for {file_path}: {e}")
@@ -56,21 +52,27 @@ def integrate_cf():
     header = reader[0]
     rows = reader[1:]
 
+    # Add CF column if not present
     if "Change_Frequency" not in header:
         header.append("Change_Frequency")
 
     updated_rows = []
 
     for row in rows:
-        filename = row[0]
-        if filename in BUILD_FILES:
-            cf_value = compute_cf(filename)
+        basename = row[0]  # e.g., "build.gradle"
+        file_path = f"FilesExamples/{basename}"  # include folder path
+
+        if os.path.exists(os.path.join(REPO_PATH, file_path)):
+            cf_value = compute_cf(file_path)
         else:
             cf_value = 0
-        row = row[:len(header)-1]  # ensure length matches header
+
+        # Ensure row length matches header before appending
+        row = row[:len(header)-1]
         row.append(cf_value)
         updated_rows.append(row)
-        print(f"{filename} → Change Frequency = {cf_value}")
+
+        print(f"{basename} → Change Frequency = {cf_value}")
 
     # Write updated CSV
     with open(SUMMARY_FILE, "w", newline="", encoding="utf-8") as f:
