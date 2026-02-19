@@ -1,32 +1,38 @@
-Line_Number,Content,Is_BLOC
-1,"<project name=""ExampleProject"" default=""compile"" basedir=""."">",1
-2,,0
-3,    <!-- Initialize properties -->,1
-4,"    <property name=""src.dir"" value=""src""/>",1
-5,"    <property name=""build.dir"" value=""build""/>",1
-6,,0
-7,    <!--,1
-8,        This is a multi-line XML comment,1
-9,        It should not be counted by BLOC,1
-10,    -->,1
-11,"    <target name=""init"">",1
-12,"        <mkdir dir=""${build.dir}""/>",1
-13,    </target>,1
-14,,0
-15,"    <target name=""compile"" depends=""init"" if=""src.dir"">",1
-16,"        <javac srcdir=""${src.dir}"" destdir=""${build.dir}""/>",1
-17,    </target>,1
-18,,0
-19,    <!-- Clean target -->,1
-20,"    <target name=""clean"" unless=""skip.clean"">",1
-21,"        <delete dir=""${build.dir}""/>",1
-22,    </target>,1
-23,,0
-24,"    <target name=""run"">",1
-25,"        <condition property=""can.run"">",1
-26,"            <available file=""${build.dir}/Main.class""/>",1
-27,        </condition>,1
-28,"        <echo message=""Ready to run.""/>",1
-29,    </target>,1
-30,,0
-31,</project>,1
+Line_Number,Content,Is_BLOC,BLOC_Number
+1,"<project name=""ExampleProject"" default=""compile"" basedir=""."">",1,1
+2,,0,
+3,    <!-- Initialize properties -->,0,
+4,"    <property name=""src.dir"" value=""src""/>",1,2
+5,"    <property name=""build.dir"" value=""build""/>",1,3
+6,,0,
+7,    <!--,1,4
+8,        This is a multi-line XML comment,1,5
+9,        It should not be counted by BLOC,1,6
+10,    -->,1,7
+11,"    <target name=""init"">",1,8
+12,"        <mkdir dir=""${build.dir}""/>",1,9
+13,    </target>,1,10
+14,,0,
+15,"    <target name=""compile"" depends=""init"" if=""src.dir"">",1,11
+16,"        <javac srcdir=""${src.dir}"" destdir=""${build.dir}""/>",1,12
+17,    </target>,1,13
+18,,0,
+19,    <!-- Clean target -->,0,
+20,"    <target name=""clean"" unless=""skip.clean"">",1,14
+21,"        <delete dir=""${build.dir}""/>",1,15
+22,    </target>,1,16
+23,,0,
+24,"    <target name=""run"">",1,17
+25,"        <condition property=""can.run"">",1,18
+26,"            <available file=""${build.dir}/Main.class""/>",1,19
+27,        </condition>,1,20
+28,"        <echo message=""Ready to run.""/>",1,21
+29,    </target>,1,22
+30,,0,
+31,</project>,1,23
+32,,0,
+33,// Dummy CF test commit: CF Test commit 1 for build.xml,0,
+34,,0,
+35,// Dummy CF test commit: CF Test commit 2 for build.xml,0,
+36,,0,
+37,// Dummy CF test commit: CF Test commit 3 for build.xml,0,

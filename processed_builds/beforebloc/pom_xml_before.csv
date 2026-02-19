@@ -35,3 +35,9 @@ Line_Number,Content
 34,    </plugins>
 35,  </build>
 36,</project>
+37,
+38,// Dummy CF test commit: CF Test commit 1 for pom.xml
+39,
+40,// Dummy CF test commit: CF Test commit 2 for pom.xml
+41,
+42,// Dummy CF test commit: CF Test commit 3 for pom.xml

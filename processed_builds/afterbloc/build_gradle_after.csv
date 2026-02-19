@@ -1,27 +1,33 @@
-Line_Number,Content,Is_BLOC
-1,class BuildScriptSimulation {,1
-2,,0
-3,    def exampleMethodWithBadName() { // Violates MethodName rule,1
-4,"        def VeryLongVariableNameThatExceedsNormalConvention = ""This is a long variable name"" // Violates VariableName",1
-5,"        println ""This is a very long line that is intentionally written to exceed the maximum allowed length of 120 characters, just to trigger the LineLength rule in CodeNarc""",1
-6,,0
-7,        (1..60).each { i -> // Violates MethodSize rule,1
-8,"            println ""Line $i""",1
-9,        },1
-10,,0
-11,        /*,1
-12,        This is a multi-line comment,1
-13,        spanning multiple lines,1
-14,        It should be ignored by the BLOC analyzer,1
-15,        */,1
-16,"        println ""End of method""",1
-17,    },1
-18,,0
-19,    class bad_class_name { // Violates ClassName rule,1
-20,"        String BAD_FIELD_NAME = ""oops"" // Violates FieldName rule",1
-21,,0
-22,"        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule",1
-23,            println BAD_FIELD_NAME,1
-24,        },1
-25,    },1
-26,},1
+Line_Number,Content,Is_BLOC,BLOC_Number
+1,class BuildScriptSimulation {,1,1
+2,,0,
+3,    def exampleMethodWithBadName() { // Violates MethodName rule,1,2
+4,"        def VeryLongVariableNameThatExceedsNormalConvention = ""This is a long variable name"" // Violates VariableName",1,3
+5,"        println ""This is a very long line that is intentionally written to exceed the maximum allowed length of 120 characters, just to trigger the LineLength rule in CodeNarc""",1,4
+6,,0,
+7,        (1..60).each { i -> // Violates MethodSize rule,1,5
+8,"            println ""Line $i""",1,6
+9,        },1,7
+10,,0,
+11,        /*,1,8
+12,        This is a multi-line comment,1,9
+13,        spanning multiple lines,1,10
+14,        It should be ignored by the BLOC analyzer,1,11
+15,        */,1,12
+16,"        println ""End of method""",1,13
+17,    },1,14
+18,,0,
+19,    class bad_class_name { // Violates ClassName rule,1,15
+20,"        String BAD_FIELD_NAME = ""oops"" // Violates FieldName rule",1,16
+21,,0,
+22,"        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule",1,17
+23,            println BAD_FIELD_NAME,1,18
+24,        },1,19
+25,    },1,20
+26,},1,21
+27,,0,
+28,// Dummy CF test commit: CF Test commit 1 for build.gradle,0,
+29,,0,
+30,// Dummy CF test commit: CF Test commit 2 for build.gradle,0,
+31,,0,
+32,// Dummy CF test commit: CF Test commit 3 for build.gradle,0,

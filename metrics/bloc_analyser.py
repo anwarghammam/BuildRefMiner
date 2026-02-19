@@ -9,8 +9,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
 
-BEFORE_FOLDER = os.path.join(OUTPUT_FOLDER, "beforebloc")  # updated folder name
-AFTER_FOLDER = os.path.join(OUTPUT_FOLDER, "afterbloc")    # updated folder name
+BEFORE_FOLDER = os.path.join(OUTPUT_FOLDER, "beforebloc")
+AFTER_FOLDER = os.path.join(OUTPUT_FOLDER, "afterbloc")
 
 # Create output folders if they don't exist
 os.makedirs(BEFORE_FOLDER, exist_ok=True)
@@ -31,7 +31,10 @@ def is_bloc(line):
     if stripped.startswith("//") or stripped.startswith("#"):
         return 0
 
-    # Everything else counts as BLOC
+    # Ignore XML single-line comments
+    if stripped.startswith("<!--") and stripped.endswith("-->"):
+        return 0
+
     return 1
 
 
@@ -46,6 +49,7 @@ def process_file(filepath, summary_data):
     after_path = os.path.join(AFTER_FOLDER, f"{name_without_ext}_after.csv")
 
     total_bloc = 0
+    bloc_counter = 0  # NEW: sequential BLOC numbering
 
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -61,16 +65,23 @@ def process_file(filepath, summary_data):
             writer.writerow([i, line.rstrip()])
 
     # -------------------------
-    # Write AFTER CSV
+    # Write AFTER CSV (UPDATED)
     # -------------------------
     with open(after_path, "w", newline="", encoding="utf-8") as after_csv:
         writer = csv.writer(after_csv)
-        writer.writerow(["Line_Number", "Content", "Is_BLOC"])
+        writer.writerow(["Line_Number", "Content", "Is_BLOC", "BLOC_Number"])
 
         for i, line in enumerate(lines, 1):
             bloc_flag = is_bloc(line)
-            total_bloc += bloc_flag
-            writer.writerow([i, line.rstrip(), bloc_flag])
+
+            if bloc_flag == 1:
+                bloc_counter += 1
+                bloc_number = bloc_counter
+                total_bloc += 1
+            else:
+                bloc_number = ""
+
+            writer.writerow([i, line.rstrip(), bloc_flag, bloc_number])
 
     summary_data.append([filename, total_bloc])
 
