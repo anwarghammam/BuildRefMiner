@@ -1,8 +1,13 @@
 <project name="ExampleProject" default="compile" basedir=".">
     
+    <!-- Initialize properties -->
     <property name="src.dir" value="src"/>
     <property name="build.dir" value="build"/>
 
+    <!--
+        This is a multi-line XML comment
+        It should not be counted by BLOC
+    -->
     <target name="init">
         <mkdir dir="${build.dir}"/>
     </target>
@@ -11,6 +16,7 @@
         <javac srcdir="${src.dir}" destdir="${build.dir}"/>
     </target>
 
+    <!-- Clean target -->
     <target name="clean" unless="skip.clean">
         <delete dir="${build.dir}"/>
     </target>
@@ -23,3 +29,9 @@
     </target>
 
 </project>
+
+// Dummy CF test commit: CF Test commit 1 for build.xml
+
+// Dummy CF test commit: CF Test commit 2 for build.xml
+
+// Dummy CF test commit: CF Test commit 3 for build.xml
