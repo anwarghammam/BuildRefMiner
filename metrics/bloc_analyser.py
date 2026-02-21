@@ -12,7 +12,6 @@ OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
 BEFORE_FOLDER = os.path.join(OUTPUT_FOLDER, "beforebloc")
 AFTER_FOLDER = os.path.join(OUTPUT_FOLDER, "afterbloc")
 
-# Create output folders if they don't exist
 os.makedirs(BEFORE_FOLDER, exist_ok=True)
 os.makedirs(AFTER_FOLDER, exist_ok=True)
 
@@ -29,7 +28,7 @@ def process_file(filepath, summary_data):
 
     total_bloc = 0
     bloc_counter = 0
-    in_multiline_comment = False   # 🔴 Important flag
+    in_multiline_comment = False  # Tracks /* ... */
 
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -53,41 +52,38 @@ def process_file(filepath, summary_data):
 
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
-            bloc_flag = 1  # Assume it's BLOC initially
+            bloc_flag = 1  # Assume valid BLOC initially
 
-            # --------------------------------------------------
-            # Handle multi-line comments /* ... */
-            # --------------------------------------------------
-
-            # If already inside multi-line comment
+            # ------------------------------------------
+            # Handle multi-line comments
+            # ------------------------------------------
             if in_multiline_comment:
                 bloc_flag = 0
                 if "*/" in stripped:
                     in_multiline_comment = False
 
-            # If starting a multi-line comment
-            elif stripped.startswith("/*"):
-                bloc_flag = 0
-                if "*/" not in stripped:
-                    in_multiline_comment = True
+            else:
+                # Multi-line comment start
+                if "/*" in stripped:
+                    bloc_flag = 0
+                    if "*/" not in stripped:
+                        in_multiline_comment = True
 
-            # --------------------------------------------------
-            # Ignore single-line comments
-            # --------------------------------------------------
-            elif stripped.startswith("//") or stripped.startswith("#"):
-                bloc_flag = 0
+                # Single-line comments
+                elif stripped.startswith("//") or stripped.startswith("#"):
+                    bloc_flag = 0
 
-            # Ignore XML single-line comments
-            elif stripped.startswith("<!--") and stripped.endswith("-->"):
-                bloc_flag = 0
+                # XML single-line comments
+                elif stripped.startswith("<!--") and stripped.endswith("-->"):
+                    bloc_flag = 0
 
-            # Ignore empty lines
-            elif not stripped:
-                bloc_flag = 0
+                # Empty line
+                elif not stripped:
+                    bloc_flag = 0
 
-            # --------------------------------------------------
+            # ------------------------------------------
             # Count valid BLOC
-            # --------------------------------------------------
+            # ------------------------------------------
             if bloc_flag == 1:
                 bloc_counter += 1
                 bloc_number = bloc_counter
@@ -98,7 +94,6 @@ def process_file(filepath, summary_data):
             writer.writerow([i, line.rstrip(), bloc_flag, bloc_number])
 
     summary_data.append([filename, total_bloc])
-
     print(f"Processed: {filename} | Total BLOC = {total_bloc}")
 
 
@@ -130,7 +125,7 @@ def main():
         writer.writerows(summary_data)
 
     print("\nBLOC Analysis Completed.")
-    print("Check processed_builds folder for results.")
+    print("Check 'processed_builds' folder for results.")
 
 
 # --------------------------------------------------
