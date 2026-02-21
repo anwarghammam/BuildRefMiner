@@ -17,7 +17,7 @@ os.makedirs(AFTER_FOLDER, exist_ok=True)
 
 
 # --------------------------------------------------
-# BLOC Logic (Handles Multi-line Comments)
+# Process Each File (Robust BLOC Logic)
 # --------------------------------------------------
 def process_file(filepath, summary_data):
     filename = os.path.basename(filepath)
@@ -52,43 +52,79 @@ def process_file(filepath, summary_data):
         writer.writerow(["Line_Number", "Content", "Is_BLOC", "BLOC_Number"])
 
         for i, line in enumerate(lines, 1):
+            original_line = line.rstrip()
             stripped = line.strip()
-            is_bloc = 0
-            current_bloc_number = ""
 
             # Skip empty lines
             if not stripped:
-                writer.writerow([i, line.rstrip(), 0, ""])
+                writer.writerow([i, original_line, 0, ""])
                 continue
 
-            # Handle multi-line comments (Gradle /* */)
-            if "/*" in stripped:
-                in_multiline_comment = True
+            # --------------------------------------------------
+            # Handle XML Multi-line Comments <!-- -->
+            # --------------------------------------------------
+            if not in_multiline_comment and "<!--" in stripped:
+                if "-->" in stripped:
+                    # Inline XML comment
+                    stripped = stripped.split("<!--")[0].strip()
+                    if not stripped:
+                        writer.writerow([i, original_line, 0, ""])
+                        continue
+                else:
+                    in_multiline_comment = True
+                    writer.writerow([i, original_line, 0, ""])
+                    continue
 
-            if "<!--" in stripped:
-                in_multiline_comment = True
-
-            if in_multiline_comment:
-                if "*/" in stripped:
-                    in_multiline_comment = False
+            elif in_multiline_comment:
                 if "-->" in stripped:
                     in_multiline_comment = False
-
-                writer.writerow([i, line.rstrip(), 0, ""])
+                writer.writerow([i, original_line, 0, ""])
                 continue
 
-            # Ignore single-line comments
-            if stripped.startswith("//") or stripped.startswith("#"):
-                writer.writerow([i, line.rstrip(), 0, ""])
+            # --------------------------------------------------
+            # Handle Gradle Multi-line Comments /* */
+            # --------------------------------------------------
+            if not in_multiline_comment and "/*" in stripped:
+                if "*/" in stripped:
+                    # Inline block comment
+                    before_comment = stripped.split("/*")[0].strip()
+                    if not before_comment:
+                        writer.writerow([i, original_line, 0, ""])
+                        continue
+                    stripped = before_comment
+                else:
+                    in_multiline_comment = True
+                    writer.writerow([i, original_line, 0, ""])
+                    continue
+
+            elif in_multiline_comment:
+                if "*/" in stripped:
+                    in_multiline_comment = False
+                writer.writerow([i, original_line, 0, ""])
                 continue
 
-            # Everything else counts as BLOC
-            is_bloc = 1
+            # --------------------------------------------------
+            # Remove inline single-line comments
+            # --------------------------------------------------
+            if "//" in stripped:
+                stripped = stripped.split("//")[0].strip()
+
+            if stripped.startswith("#"):
+                writer.writerow([i, original_line, 0, ""])
+                continue
+
+            # If after stripping comments nothing remains
+            if not stripped:
+                writer.writerow([i, original_line, 0, ""])
+                continue
+
+            # --------------------------------------------------
+            # Count as BLOC
+            # --------------------------------------------------
             total_bloc += 1
             bloc_number += 1
-            current_bloc_number = bloc_number
 
-            writer.writerow([i, line.rstrip(), is_bloc, current_bloc_number])
+            writer.writerow([i, original_line, 1, bloc_number])
 
     summary_data.append([filename, total_bloc])
 
