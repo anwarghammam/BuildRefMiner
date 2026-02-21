@@ -1,0 +1,14 @@
+Line_Number,Content
+1,class BadStyleClass {
+2,
+3,    def BadMethodName() {
+4,"        def VeryLongVariableNameThatExceedsNormalConvention = ""value"" // VariableName"
+5,        (1..60).each { println it } // MethodSize
+6,    }
+7,
+8,"    String BAD_FIELD_NAME = ""oops"" // FieldName"
+9,
+10,"    def methodWithTooManyParameters(p1, p2, p3, p4, p5, p6) { // ParameterName"
+11,        println BAD_FIELD_NAME
+12,    }
+13,}

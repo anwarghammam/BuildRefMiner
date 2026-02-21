@@ -66,7 +66,6 @@ def process_file(filepath, summary_data):
             # --------------------------------------------------
             if not in_xml_comment and "<!--" in stripped:
                 if "-->" in stripped:
-                    # Inline XML comment
                     stripped = stripped.split("<!--")[0].strip()
                     if not stripped:
                         writer.writerow([i, original_line, 0, ""])
@@ -75,7 +74,6 @@ def process_file(filepath, summary_data):
                     in_xml_comment = True
                     writer.writerow([i, original_line, 0, ""])
                     continue
-
             elif in_xml_comment:
                 if "-->" in stripped:
                     in_xml_comment = False
@@ -83,11 +81,10 @@ def process_file(filepath, summary_data):
                 continue
 
             # --------------------------------------------------
-            # Handle Gradle Multi-line Comments /* */
+            # Handle Multi-line Comments /* */
             # --------------------------------------------------
             if not in_block_comment and "/*" in stripped:
                 if "*/" in stripped:
-                    # Inline block comment
                     before_comment = stripped.split("/*")[0].strip()
                     if not before_comment:
                         writer.writerow([i, original_line, 0, ""])
@@ -97,7 +94,6 @@ def process_file(filepath, summary_data):
                     in_block_comment = True
                     writer.writerow([i, original_line, 0, ""])
                     continue
-
             elif in_block_comment:
                 if "*/" in stripped:
                     in_block_comment = False
@@ -129,7 +125,6 @@ def process_file(filepath, summary_data):
             writer.writerow([i, original_line, 1, bloc_number])
 
     summary_data.append([filename, total_bloc])
-
     print(f"Processed: {filename} | Total BLOC = {total_bloc}")
 
 
@@ -145,12 +140,17 @@ def main():
 
     summary_data = []
 
+    # -------------------------
+    # Process files: gradle, xml, groovy
+    # -------------------------
     for file in os.listdir(INPUT_FOLDER):
-        if file.endswith((".gradle", ".xml")):
+        if file.endswith((".gradle", ".xml", ".groovy")):  # Added .groovy
             process_file(os.path.join(INPUT_FOLDER, file), summary_data)
 
+    # -------------------------
+    # Write summary CSV
+    # -------------------------
     summary_path = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
-
     with open(summary_path, "w", newline="", encoding="utf-8") as summary_file:
         writer = csv.writer(summary_file)
         writer.writerow(["File_Name", "BLOC"])
