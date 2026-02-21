@@ -29,7 +29,8 @@ def process_file(filepath, summary_data):
     total_bloc = 0
     bloc_number = 0
 
-    in_multiline_comment = False
+    in_xml_comment = False
+    in_block_comment = False  # For /* */
 
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -63,7 +64,7 @@ def process_file(filepath, summary_data):
             # --------------------------------------------------
             # Handle XML Multi-line Comments <!-- -->
             # --------------------------------------------------
-            if not in_multiline_comment and "<!--" in stripped:
+            if not in_xml_comment and "<!--" in stripped:
                 if "-->" in stripped:
                     # Inline XML comment
                     stripped = stripped.split("<!--")[0].strip()
@@ -71,20 +72,20 @@ def process_file(filepath, summary_data):
                         writer.writerow([i, original_line, 0, ""])
                         continue
                 else:
-                    in_multiline_comment = True
+                    in_xml_comment = True
                     writer.writerow([i, original_line, 0, ""])
                     continue
 
-            elif in_multiline_comment:
+            elif in_xml_comment:
                 if "-->" in stripped:
-                    in_multiline_comment = False
+                    in_xml_comment = False
                 writer.writerow([i, original_line, 0, ""])
                 continue
 
             # --------------------------------------------------
             # Handle Gradle Multi-line Comments /* */
             # --------------------------------------------------
-            if not in_multiline_comment and "/*" in stripped:
+            if not in_block_comment and "/*" in stripped:
                 if "*/" in stripped:
                     # Inline block comment
                     before_comment = stripped.split("/*")[0].strip()
@@ -93,27 +94,28 @@ def process_file(filepath, summary_data):
                         continue
                     stripped = before_comment
                 else:
-                    in_multiline_comment = True
+                    in_block_comment = True
                     writer.writerow([i, original_line, 0, ""])
                     continue
 
-            elif in_multiline_comment:
+            elif in_block_comment:
                 if "*/" in stripped:
-                    in_multiline_comment = False
+                    in_block_comment = False
                 writer.writerow([i, original_line, 0, ""])
                 continue
 
             # --------------------------------------------------
-            # Remove inline single-line comments
+            # Remove inline single-line comments //
             # --------------------------------------------------
             if "//" in stripped:
                 stripped = stripped.split("//")[0].strip()
 
+            # Remove full-line # comments
             if stripped.startswith("#"):
                 writer.writerow([i, original_line, 0, ""])
                 continue
 
-            # If after stripping comments nothing remains
+            # If nothing remains after stripping
             if not stripped:
                 writer.writerow([i, original_line, 0, ""])
                 continue
