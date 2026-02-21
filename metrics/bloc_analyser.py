@@ -2,7 +2,7 @@ import os
 import csv
 
 # --------------------------------------------------
-# Stable Base Directory (works from anywhere)
+# Base Directory Setup
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -18,27 +18,6 @@ os.makedirs(AFTER_FOLDER, exist_ok=True)
 
 
 # --------------------------------------------------
-# BLOC Logic
-# --------------------------------------------------
-def is_bloc(line):
-    stripped = line.strip()
-
-    # Ignore empty lines
-    if not stripped:
-        return 0
-
-    # Ignore single-line comments
-    if stripped.startswith("//") or stripped.startswith("#"):
-        return 0
-
-    # Ignore XML single-line comments
-    if stripped.startswith("<!--") and stripped.endswith("-->"):
-        return 0
-
-    return 1
-
-
-# --------------------------------------------------
 # Process Each File
 # --------------------------------------------------
 def process_file(filepath, summary_data):
@@ -49,7 +28,8 @@ def process_file(filepath, summary_data):
     after_path = os.path.join(AFTER_FOLDER, f"{name_without_ext}_after.csv")
 
     total_bloc = 0
-    bloc_counter = 0  # NEW: sequential BLOC numbering
+    bloc_counter = 0
+    in_multiline_comment = False   # 🔴 Important flag
 
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -65,15 +45,49 @@ def process_file(filepath, summary_data):
             writer.writerow([i, line.rstrip()])
 
     # -------------------------
-    # Write AFTER CSV (UPDATED)
+    # Write AFTER CSV
     # -------------------------
     with open(after_path, "w", newline="", encoding="utf-8") as after_csv:
         writer = csv.writer(after_csv)
         writer.writerow(["Line_Number", "Content", "Is_BLOC", "BLOC_Number"])
 
         for i, line in enumerate(lines, 1):
-            bloc_flag = is_bloc(line)
+            stripped = line.strip()
+            bloc_flag = 1  # Assume it's BLOC initially
 
+            # --------------------------------------------------
+            # Handle multi-line comments /* ... */
+            # --------------------------------------------------
+
+            # If already inside multi-line comment
+            if in_multiline_comment:
+                bloc_flag = 0
+                if "*/" in stripped:
+                    in_multiline_comment = False
+
+            # If starting a multi-line comment
+            elif stripped.startswith("/*"):
+                bloc_flag = 0
+                if "*/" not in stripped:
+                    in_multiline_comment = True
+
+            # --------------------------------------------------
+            # Ignore single-line comments
+            # --------------------------------------------------
+            elif stripped.startswith("//") or stripped.startswith("#"):
+                bloc_flag = 0
+
+            # Ignore XML single-line comments
+            elif stripped.startswith("<!--") and stripped.endswith("-->"):
+                bloc_flag = 0
+
+            # Ignore empty lines
+            elif not stripped:
+                bloc_flag = 0
+
+            # --------------------------------------------------
+            # Count valid BLOC
+            # --------------------------------------------------
             if bloc_flag == 1:
                 bloc_counter += 1
                 bloc_number = bloc_counter
@@ -102,7 +116,8 @@ def main():
 
     for file in os.listdir(INPUT_FOLDER):
         if file.endswith((".gradle", ".xml")):
-            process_file(os.path.join(INPUT_FOLDER, file), summary_data)
+            filepath = os.path.join(INPUT_FOLDER, file)
+            process_file(filepath, summary_data)
 
     # -------------------------
     # Write Summary CSV
@@ -115,7 +130,7 @@ def main():
         writer.writerows(summary_data)
 
     print("\nBLOC Analysis Completed.")
-    print("Check 'processed_builds/beforebloc' and 'processed_builds/afterbloc' for results.")
+    print("Check processed_builds folder for results.")
 
 
 # --------------------------------------------------
