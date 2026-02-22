@@ -16,19 +16,10 @@ class BuildScriptSimulation {
 
         def env = "prod"
 
-        // -------- Decision 1 (if) --------
         if (env == "prod") {
             println "Production mode"
-        } else {
-            println "Non-production mode"
         }
 
-        // -------- Decision 2 (for loop) --------
-        for (int j = 0; j < 2; j++) {
-            println "Loop $j"
-        }
-
-        // -------- Decision 3 (switch cases) --------
         switch(env) {
             case "dev":
                 println "Development"
@@ -36,10 +27,25 @@ class BuildScriptSimulation {
             case "prod":
                 println "Production"
                 break
-            default:
-                println "Unknown"
-                break
         }
+
+        // ===== Added duplicate fragments for Clone Density demo =====
+        def cloneTaskA = {
+            def y = 2
+            if (y > 0) {
+                println "CLONE"
+            }
+            println "END"
+        }
+
+        def cloneTaskB = {
+            def y = 2
+            if (y > 0) {
+                println "CLONE"
+            }
+            println "END"
+        }
+        // ============================================================
 
         println "End of method"
     }
@@ -54,7 +60,5 @@ class BuildScriptSimulation {
 }
 
 // Dummy CF test commit: CF Test commit 1 for build.gradle
-
 // Dummy CF test commit: CF Test commit 2 for build.gradle
-
 // Dummy CF test commit: CF Test commit 3 for build.gradle

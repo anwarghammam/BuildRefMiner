@@ -28,5 +28,22 @@
         <echo message="Ready to run."/>
     </target>
 
-</project>
+    <!-- ===== Added duplicate fragments for Clone Density demo ===== -->
+    <target name="dupA">
+        <echo message="CLONE_START"/>
+        <mkdir dir="${build.dir}/tmp"/>
+        <echo message="LINE_1"/>
+        <echo message="LINE_2"/>
+        <echo message="CLONE_END"/>
+    </target>
 
+    <target name="dupB">
+        <echo message="CLONE_START"/>
+        <mkdir dir="${build.dir}/tmp"/>
+        <echo message="LINE_1"/>
+        <echo message="LINE_2"/>
+        <echo message="CLONE_END"/>
+    </target>
+    <!-- ============================================================ -->
+
+</project>

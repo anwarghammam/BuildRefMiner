@@ -21,6 +21,44 @@
     </dependency>
   </dependencies>
 
+  <!-- ===== Added duplicate fragments for Clone Density demo ===== -->
+  <profiles>
+    <profile>
+      <id>cloneProfileA</id>
+
+      <!-- identical 5-line clone chunk starts here -->
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <demo.clone>YES</demo.clone>
+      </properties>
+      <!-- identical 5-line clone chunk ends here -->
+
+      <build>
+        <finalName>clone-demo</finalName>
+      </build>
+    </profile>
+
+    <profile>
+      <id>cloneProfileB</id>
+
+      <!-- identical 5-line clone chunk starts here -->
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <demo.clone>YES</demo.clone>
+      </properties>
+      <!-- identical 5-line clone chunk ends here -->
+
+      <build>
+        <finalName>clone-demo</finalName>
+      </build>
+    </profile>
+  </profiles>
+  <!-- ============================================================ -->
+
   <build>
     <plugins>
       <plugin>
@@ -33,28 +71,4 @@
       </plugin>
     </plugins>
   </build>
-    <profiles>
-    <profile>
-      <id>dev-profile</id>
-      <activation>
-        <activeByDefault>true</activeByDefault>
-      </activation>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <executions>
-              <execution>
-                <goals>
-                  <goal>test</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
 </project>
-

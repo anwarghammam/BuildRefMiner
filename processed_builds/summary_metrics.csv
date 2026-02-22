@@ -1,5 +1,5 @@
-File_Name,BLOC,Cyclomatic_Complexity,Halstead_Volume
-build.xml,19,5,78.14
-pom.xml,52,4,378.94
-TestScript.groovy,23,4,224.66
-build.gradle,28,5,330.34
+File_Name,BLOC,Cyclomatic_Complexity,Halstead_Volume,Churn,CloneDensity_Intra_k5,CloneDensity_Cross_k5,CloneDensity_Intra_k10,CloneDensity_Cross_k10,CloneDensity_Intra_k15,CloneDensity_Cross_k15,CloneDensity_Intra_k20,CloneDensity_Cross_k20,Clone_Density
+build.xml,19,5,78.14,100,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.364
+pom.xml,52,4,378.94,204,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.364
+TestScript.groovy,23,4,224.66,39,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.5
+build.gradle,28,5,330.34,146,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.286
