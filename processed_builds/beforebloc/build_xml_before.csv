@@ -29,5 +29,22 @@ Line_Number,Content
 28,"        <echo message=""Ready to run.""/>"
 29,    </target>
 30,
-31,</project>
-32,
+31,    <!-- ===== Added duplicate fragments for Clone Density demo ===== -->
+32,"    <target name=""dupA"">"
+33,"        <echo message=""CLONE_START""/>"
+34,"        <mkdir dir=""${build.dir}/tmp""/>"
+35,"        <echo message=""LINE_1""/>"
+36,"        <echo message=""LINE_2""/>"
+37,"        <echo message=""CLONE_END""/>"
+38,    </target>
+39,
+40,"    <target name=""dupB"">"
+41,"        <echo message=""CLONE_START""/>"
+42,"        <mkdir dir=""${build.dir}/tmp""/>"
+43,"        <echo message=""LINE_1""/>"
+44,"        <echo message=""LINE_2""/>"
+45,"        <echo message=""CLONE_END""/>"
+46,    </target>
+47,    <!-- ============================================================ -->
+48,
+49,</project>

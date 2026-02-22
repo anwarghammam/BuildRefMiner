@@ -29,5 +29,22 @@ Line_Number,Content,Is_BLOC,BLOC_Number
 28,"        <echo message=""Ready to run.""/>",1,17
 29,    </target>,1,18
 30,,0,
-31,</project>,1,19
-32,,0,
+31,    <!-- ===== Added duplicate fragments for Clone Density demo ===== -->,0,
+32,"    <target name=""dupA"">",1,19
+33,"        <echo message=""CLONE_START""/>",1,20
+34,"        <mkdir dir=""${build.dir}/tmp""/>",1,21
+35,"        <echo message=""LINE_1""/>",1,22
+36,"        <echo message=""LINE_2""/>",1,23
+37,"        <echo message=""CLONE_END""/>",1,24
+38,    </target>,1,25
+39,,0,
+40,"    <target name=""dupB"">",1,26
+41,"        <echo message=""CLONE_START""/>",1,27
+42,"        <mkdir dir=""${build.dir}/tmp""/>",1,28
+43,"        <echo message=""LINE_1""/>",1,29
+44,"        <echo message=""LINE_2""/>",1,30
+45,"        <echo message=""CLONE_END""/>",1,31
+46,    </target>,1,32
+47,    <!-- ============================================================ -->,0,
+48,,0,
+49,</project>,1,33

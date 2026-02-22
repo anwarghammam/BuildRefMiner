@@ -5,25 +5,28 @@ Line_Number,Content,Is_BLOC,BLOC_Number
 4,"        def VeryLongVariableNameThatExceedsNormalConvention = ""value"" // VariableName",1,3
 5,        (1..60).each { println it } // MethodSize,1,4
 6,    },1,5
-7,"            if (VeryLongVariableNameThatExceedsNormalConvention == ""value"") {",1,6
-8,"            println ""Matched""",1,7
-9,        } else {,1,8
-10,"            println ""Not Matched""",1,9
-11,        },1,10
-12,,0,
-13,        for (int i = 0; i < 3; i++) {,1,11
-14,            println i,1,12
-15,        },1,13
+7,,0,
+8,    // ===== Added duplicate fragments for Clone Density demo =====,0,
+9,    def cloneBlockA() {,1,6
+10,        def x = 1,1,7
+11,        if (x > 0) {,1,8
+12,"            println ""CLONE""",1,9
+13,        },1,10
+14,"        println ""END""",1,11
+15,    },1,12
 16,,0,
-17,        try {,1,14
-18,            int x = 10 / 2,1,15
-19,        } catch (Exception e) {,1,16
-20,"            println ""Error occurred""",1,17
-21,        },1,18
-22,,0,
-23,"    String BAD_FIELD_NAME = ""oops"" // FieldName",1,19
-24,,0,
-25,"    def methodWithTooManyParameters(p1, p2, p3, p4, p5, p6) { // ParameterName",1,20
-26,        println BAD_FIELD_NAME,1,21
-27,    },1,22
-28,},1,23
+17,    def cloneBlockB() {,1,13
+18,        def x = 1,1,14
+19,        if (x > 0) {,1,15
+20,"            println ""CLONE""",1,16
+21,        },1,17
+22,"        println ""END""",1,18
+23,    },1,19
+24,    // ============================================================,0,
+25,,0,
+26,"    String BAD_FIELD_NAME = ""oops"" // FieldName",1,20
+27,,0,
+28,"    def methodWithTooManyParameters(p1, p2, p3, p4, p5, p6) { // ParameterName",1,21
+29,        println BAD_FIELD_NAME,1,22
+30,    },1,23
+31,},1,24

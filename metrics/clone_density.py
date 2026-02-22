@@ -18,14 +18,17 @@ MIN_CLONE_LEN = 5
 # Remove comments (XML + Groovy/Gradle)
 # --------------------------------------------------
 def remove_comments(text: str) -> str:
-    # Remove XML comments <!-- ... -->
+    # XML comments <!-- ... -->
     text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
-    # Remove block comments /* ... */
+    # Groovy/Gradle block comments /* ... */
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
 
-    # Remove single-line comments //
+    # Single-line comments //
     text = re.sub(r"//.*", "", text)
+
+    # Optional: lines starting with #
+    text = re.sub(r"^\s*#.*$", "", text, flags=re.MULTILINE)
 
     return text
 
@@ -48,7 +51,8 @@ def normalize_lines(text: str) -> list[str]:
 
 
 # --------------------------------------------------
-# Detect cloned lines within a file
+# Detect cloned lines within a file (Type-I)
+# A line is cloned if it belongs to any k-line window repeated >=2 times.
 # --------------------------------------------------
 def detect_cloned_lines(lines: list[str], k: int) -> int:
     n = len(lines)
@@ -57,14 +61,11 @@ def detect_cloned_lines(lines: list[str], k: int) -> int:
 
     windows = defaultdict(list)
 
-    # Build sliding windows
     for i in range(n - k + 1):
-        window = tuple(lines[i:i + k])
+        window = tuple(lines[i : i + k])
         windows[window].append(i)
 
     cloned = set()
-
-    # Any window appearing ≥2 times is a clone
     for starts in windows.values():
         if len(starts) >= 2:
             for s in starts:
@@ -76,6 +77,7 @@ def detect_cloned_lines(lines: list[str], k: int) -> int:
 
 # --------------------------------------------------
 # Compute Clone Density for one file
+# Clone Density = cloned_lines / total_logic_lines
 # --------------------------------------------------
 def compute_clone_density(file_path: str) -> float:
     with open(file_path, "r", encoding="utf-8") as f:
@@ -95,44 +97,77 @@ def compute_clone_density(file_path: str) -> float:
 
 # --------------------------------------------------
 # Integrate into summary_metrics.csv
+# - Remove any previous clone-related columns
+# - Add only one: Clone_Density
 # --------------------------------------------------
-def integrate_clone_density():
+def integrate_clone_density() -> None:
+    print("\n=== Running Clone Density Metric ===")
+
     if not os.path.exists(SUMMARY_FILE):
-        print("summary_metrics.csv not found.")
+        print(f"ERROR: summary_metrics.csv not found at: {SUMMARY_FILE}")
+        print("Run BLOC first to create the summary file.")
         return
 
+    if not os.path.exists(FILES_DIR):
+        print(f"ERROR: FilesExamples folder not found at: {FILES_DIR}")
+        return
+
+    # Read CSV
     with open(SUMMARY_FILE, "r", encoding="utf-8") as f:
         rows = list(csv.reader(f))
 
-    header = rows[0]
-    body = rows[1:]
+    if not rows:
+        print("ERROR: summary_metrics.csv is empty.")
+        return
 
-    if "Clone_Density" not in header:
-        header.append("Clone_Density")
+    old_header = rows[0]
+    old_body = rows[1:]
+
+    # Remove ANY clone-related columns from header
+    # (handles Clone_Density, CloneDensity_Intra_k5, etc.)
+    keep_col_indices = []
+    new_header = []
+    for idx, col in enumerate(old_header):
+        if re.search(r"clone", col, flags=re.IGNORECASE):
+            continue
+        keep_col_indices.append(idx)
+        new_header.append(col)
+
+    # Add final single clone column
+    new_header.append("Clone_Density")
 
     updated_rows = []
 
-    for row in body:
-        filename = os.path.basename(row[0])
+    for row in old_body:
+        if not row:
+            continue
+
+        # Build cleaned row keeping only non-clone columns (safe if row shorter)
+        cleaned = []
+        for idx in keep_col_indices:
+            cleaned.append(row[idx] if idx < len(row) else "")
+
+        filename = os.path.basename(cleaned[0]) if cleaned else ""
         file_path = os.path.join(FILES_DIR, filename)
 
-        if os.path.exists(file_path):
-            density = compute_clone_density(file_path)
+        if filename and os.path.exists(file_path):
+            cd = compute_clone_density(file_path)
         else:
-            density = 0.0
+            cd = 0.0
 
-        row = row[:len(header)-1]
-        row.append(density)
-        updated_rows.append(row)
+        cleaned.append(str(cd))
+        updated_rows.append(cleaned)
 
-        print(f"{filename} -> Clone Density = {density}")
+        print(f"{filename} -> Clone Density = {cd}")
 
+    # Write back
     with open(SUMMARY_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        writer.writerows(updated_rows)
+        w = csv.writer(f)
+        w.writerow(new_header)
+        w.writerows(updated_rows)
 
-    print("\nClone Density successfully added to summary_metrics.csv")
+    print("\n✅ Clone Density added as a single column: Clone_Density")
+    print(f"Updated file: {SUMMARY_FILE}")
 
 
 # --------------------------------------------------

@@ -22,40 +22,54 @@ Line_Number,Content,Is_BLOC,BLOC_Number
 21,    </dependency>,1,15
 22,  </dependencies>,1,16
 23,,0,
-24,  <build>,1,17
-25,    <plugins>,1,18
-26,      <plugin>,1,19
-27,        <groupId>org.apache.maven.plugins</groupId>,1,20
-28,        <artifactId>maven-compiler-plugin</artifactId>,1,21
-29,      </plugin>,1,22
-30,      <plugin>,1,23
-31,        <groupId>org.apache.maven.plugins</groupId>,1,24
-32,        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->,1,25
-33,      </plugin>,1,26
-34,    </plugins>,1,27
-35,  </build>,1,28
-36,    <profiles>,1,29
-37,    <profile>,1,30
-38,      <id>dev-profile</id>,1,31
-39,      <activation>,1,32
-40,        <activeByDefault>true</activeByDefault>,1,33
-41,      </activation>,1,34
-42,      <build>,1,35
-43,        <plugins>,1,36
-44,          <plugin>,1,37
-45,            <groupId>org.apache.maven.plugins</groupId>,1,38
-46,            <artifactId>maven-surefire-plugin</artifactId>,1,39
-47,            <executions>,1,40
-48,              <execution>,1,41
-49,                <goals>,1,42
-50,                  <goal>test</goal>,1,43
-51,                </goals>,1,44
-52,              </execution>,1,45
-53,            </executions>,1,46
-54,          </plugin>,1,47
-55,        </plugins>,1,48
-56,      </build>,1,49
-57,    </profile>,1,50
-58,  </profiles>,1,51
-59,</project>,1,52
-60,,0,
+24,  <!-- ===== Added duplicate fragments for Clone Density demo ===== -->,0,
+25,  <profiles>,1,17
+26,    <profile>,1,18
+27,      <id>cloneProfileA</id>,1,19
+28,,0,
+29,      <!-- identical 5-line clone chunk starts here -->,0,
+30,      <activation>,1,20
+31,        <activeByDefault>true</activeByDefault>,1,21
+32,      </activation>,1,22
+33,      <properties>,1,23
+34,        <demo.clone>YES</demo.clone>,1,24
+35,      </properties>,1,25
+36,      <!-- identical 5-line clone chunk ends here -->,0,
+37,,0,
+38,      <build>,1,26
+39,        <finalName>clone-demo</finalName>,1,27
+40,      </build>,1,28
+41,    </profile>,1,29
+42,,0,
+43,    <profile>,1,30
+44,      <id>cloneProfileB</id>,1,31
+45,,0,
+46,      <!-- identical 5-line clone chunk starts here -->,0,
+47,      <activation>,1,32
+48,        <activeByDefault>true</activeByDefault>,1,33
+49,      </activation>,1,34
+50,      <properties>,1,35
+51,        <demo.clone>YES</demo.clone>,1,36
+52,      </properties>,1,37
+53,      <!-- identical 5-line clone chunk ends here -->,0,
+54,,0,
+55,      <build>,1,38
+56,        <finalName>clone-demo</finalName>,1,39
+57,      </build>,1,40
+58,    </profile>,1,41
+59,  </profiles>,1,42
+60,  <!-- ============================================================ -->,0,
+61,,0,
+62,  <build>,1,43
+63,    <plugins>,1,44
+64,      <plugin>,1,45
+65,        <groupId>org.apache.maven.plugins</groupId>,1,46
+66,        <artifactId>maven-compiler-plugin</artifactId>,1,47
+67,      </plugin>,1,48
+68,      <plugin>,1,49
+69,        <groupId>org.apache.maven.plugins</groupId>,1,50
+70,        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->,1,51
+71,      </plugin>,1,52
+72,    </plugins>,1,53
+73,  </build>,1,54
+74,</project>,1,55
