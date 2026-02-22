@@ -13,6 +13,34 @@ class BuildScriptSimulation {
         spanning multiple lines
         It should be ignored by the BLOC analyzer
         */
+
+        def env = "prod"
+
+        // -------- Decision 1 (if) --------
+        if (env == "prod") {
+            println "Production mode"
+        } else {
+            println "Non-production mode"
+        }
+
+        // -------- Decision 2 (for loop) --------
+        for (int j = 0; j < 2; j++) {
+            println "Loop $j"
+        }
+
+        // -------- Decision 3 (switch cases) --------
+        switch(env) {
+            case "dev":
+                println "Development"
+                break
+            case "prod":
+                println "Production"
+                break
+            default:
+                println "Unknown"
+                break
+        }
+
         println "End of method"
     }
 

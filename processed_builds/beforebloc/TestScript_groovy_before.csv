@@ -5,10 +5,25 @@ Line_Number,Content
 4,"        def VeryLongVariableNameThatExceedsNormalConvention = ""value"" // VariableName"
 5,        (1..60).each { println it } // MethodSize
 6,    }
-7,
-8,"    String BAD_FIELD_NAME = ""oops"" // FieldName"
-9,
-10,"    def methodWithTooManyParameters(p1, p2, p3, p4, p5, p6) { // ParameterName"
-11,        println BAD_FIELD_NAME
-12,    }
-13,}
+7,"            if (VeryLongVariableNameThatExceedsNormalConvention == ""value"") {"
+8,"            println ""Matched"""
+9,        } else {
+10,"            println ""Not Matched"""
+11,        }
+12,
+13,        for (int i = 0; i < 3; i++) {
+14,            println i
+15,        }
+16,
+17,        try {
+18,            int x = 10 / 2
+19,        } catch (Exception e) {
+20,"            println ""Error occurred"""
+21,        }
+22,
+23,"    String BAD_FIELD_NAME = ""oops"" // FieldName"
+24,
+25,"    def methodWithTooManyParameters(p1, p2, p3, p4, p5, p6) { // ParameterName"
+26,        println BAD_FIELD_NAME
+27,    }
+28,}

@@ -34,10 +34,28 @@ Line_Number,Content
 33,      </plugin>
 34,    </plugins>
 35,  </build>
-36,</project>
-37,
-38,// Dummy CF test commit: CF Test commit 1 for pom.xml
-39,
-40,// Dummy CF test commit: CF Test commit 2 for pom.xml
-41,
-42,// Dummy CF test commit: CF Test commit 3 for pom.xml
+36,    <profiles>
+37,    <profile>
+38,      <id>dev-profile</id>
+39,      <activation>
+40,        <activeByDefault>true</activeByDefault>
+41,      </activation>
+42,      <build>
+43,        <plugins>
+44,          <plugin>
+45,            <groupId>org.apache.maven.plugins</groupId>
+46,            <artifactId>maven-surefire-plugin</artifactId>
+47,            <executions>
+48,              <execution>
+49,                <goals>
+50,                  <goal>test</goal>
+51,                </goals>
+52,              </execution>
+53,            </executions>
+54,          </plugin>
+55,        </plugins>
+56,      </build>
+57,    </profile>
+58,  </profiles>
+59,</project>
+60,

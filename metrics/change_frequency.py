@@ -2,86 +2,47 @@ import os
 import csv
 import subprocess
 
-# --------------------------------------------------
+# -------------------------
 # Paths
-# --------------------------------------------------
+# -------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_PATH = os.path.join(BASE_DIR, "..")  # root of your Git repo
-SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
+OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
+SUMMARY_CSV = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
 
-# Target build files with folder path included
-BUILD_FILES = ["FilesExamples/build.gradle", "FilesExamples/build.xml", "FilesExamples/pom.xml"]
+# -------------------------
+# Read existing summary_metrics.csv
+# -------------------------
+summary_data = []
 
-# --------------------------------------------------
-# Compute Change Frequency using git log
-# --------------------------------------------------
-def compute_cf(file_path):
-    """
-    Counts commits modifying a file using git log
-    """
-    try:
-        # Run git log for the file
-        result = subprocess.run(
-            ["git", "log", "--pretty=format:%H", "--", file_path],
-            cwd=REPO_PATH,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        output = result.stdout.strip()
-        if not output:
-            return 0
-        commits = output.split("\n")
-        return len(commits)
-    except Exception as e:
-        print(f"Error computing CF for {file_path}: {e}")
-        return 0
+with open(SUMMARY_CSV, newline="", encoding="utf-8") as f:
+    reader = csv.reader(f)
+    headers = next(reader)  # existing headers: File_Name, BLOC
+    summary_data = list(reader)
 
-# --------------------------------------------------
-# Integrate CF into summary_metrics.csv
-# --------------------------------------------------
-def integrate_cf():
-    if not os.path.exists(SUMMARY_FILE):
-        print("ERROR: summary_metrics.csv not found. Run BLOC + CC first.")
-        return
+# -------------------------
+# Add Change Frequency for each file
+# -------------------------
+new_summary_data = []
 
-    # Read existing summary
-    with open(SUMMARY_FILE, "r", encoding="utf-8") as f:
-        reader = list(csv.reader(f))
+for row in summary_data:
+    filename = row[0]
+    # Run git log to count commits touching the file
+    file_path = os.path.join(BASE_DIR, "..", "FilesExamples", filename.replace("_", "."))
+    cmd = ["git", "log", "--pretty=oneline", "--", file_path]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    commits = result.stdout.strip().split("\n")
+    commits = [c for c in commits if c]
+    change_freq = len(commits)
+    
+    new_summary_data.append(row + [change_freq])
+    print(f"File: {filename} | BLOC = {row[1]} | Change Frequency = {change_freq}")
 
-    header = reader[0]
-    rows = reader[1:]
+# -------------------------
+# Write updated summary_metrics.csv
+# -------------------------
+with open(SUMMARY_CSV, "w", newline="", encoding="utf-8") as f:
+    writer = csv.writer(f)
+    writer.writerow(headers + ["Change_Frequency"])
+    writer.writerows(new_summary_data)
 
-    # Add CF column if not present
-    if "Change_Frequency" not in header:
-        header.append("Change_Frequency")
-
-    updated_rows = []
-
-    for row in rows:
-        basename = row[0]  # e.g., "build.gradle"
-        file_path = f"FilesExamples/{basename}"  # include folder path
-
-        if os.path.exists(os.path.join(REPO_PATH, file_path)):
-            cf_value = compute_cf(file_path)
-        else:
-            cf_value = 0
-
-        # Ensure row length matches header before appending
-        row = row[:len(header)-1]
-        row.append(cf_value)
-        updated_rows.append(row)
-
-        print(f"{basename} → Change Frequency = {cf_value}")
-
-    # Write updated CSV
-    with open(SUMMARY_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        writer.writerows(updated_rows)
-
-    print("\nChange Frequency successfully added to summary_metrics.csv")
-
-# --------------------------------------------------
-if __name__ == "__main__":
-    integrate_cf()
+print("\nUpdated summary_metrics.csv with Change Frequency!")

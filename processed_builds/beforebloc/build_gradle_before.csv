@@ -14,20 +14,34 @@ Line_Number,Content
 13,        spanning multiple lines
 14,        It should be ignored by the BLOC analyzer
 15,        */
-16,"        println ""End of method"""
-17,    }
-18,
-19,    class bad_class_name { // Violates ClassName rule
-20,"        String BAD_FIELD_NAME = ""oops"" // Violates FieldName rule"
+16,"                def env = ""prod"""
+17,
+18,"        if (env == ""prod"") {"
+19,"            println ""Production mode"""
+20,        }
 21,
-22,"        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule"
-23,            println BAD_FIELD_NAME
-24,        }
-25,    }
-26,}
-27,
-28,// Dummy CF test commit: CF Test commit 1 for build.gradle
-29,
-30,// Dummy CF test commit: CF Test commit 2 for build.gradle
-31,
-32,// Dummy CF test commit: CF Test commit 3 for build.gradle
+22,        switch(env) {
+23,"            case ""dev"":"
+24,"                println ""Development"""
+25,                break
+26,"            case ""prod"":"
+27,"                println ""Production"""
+28,                break
+29,        }
+30,"        println ""End of method"""
+31,    }
+32,
+33,    class bad_class_name { // Violates ClassName rule
+34,"        String BAD_FIELD_NAME = ""oops"" // Violates FieldName rule"
+35,
+36,"        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule"
+37,            println BAD_FIELD_NAME
+38,        }
+39,    }
+40,}
+41,
+42,// Dummy CF test commit: CF Test commit 1 for build.gradle
+43,
+44,// Dummy CF test commit: CF Test commit 2 for build.gradle
+45,
+46,// Dummy CF test commit: CF Test commit 3 for build.gradle

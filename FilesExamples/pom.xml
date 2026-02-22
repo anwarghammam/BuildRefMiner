@@ -33,10 +33,28 @@
       </plugin>
     </plugins>
   </build>
+    <profiles>
+    <profile>
+      <id>dev-profile</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>test</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
 
-// Dummy CF test commit: CF Test commit 1 for pom.xml
-
-// Dummy CF test commit: CF Test commit 2 for pom.xml
-
-// Dummy CF test commit: CF Test commit 3 for pom.xml

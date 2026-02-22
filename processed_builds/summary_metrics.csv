@@ -1,5 +1,5 @@
-File_Name,BLOC
-build.xml,19
-pom.xml,29
-TestScript.groovy,10
-build.gradle,16
+File_Name,BLOC,Cyclomatic_Complexity
+build.xml,19,5
+pom.xml,52,4
+TestScript.groovy,23,4
+build.gradle,28,5
