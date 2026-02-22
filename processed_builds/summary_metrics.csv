@@ -1,5 +1,5 @@
-File_Name,BLOC,Cyclomatic_Complexity
-build.xml,19,5
-pom.xml,52,4
-TestScript.groovy,23,4
-build.gradle,28,5
+File_Name,BLOC,Cyclomatic_Complexity,Halstead_Volume
+build.xml,19,5,78.14
+pom.xml,52,4,378.94
+TestScript.groovy,23,4,224.66
+build.gradle,28,5,330.34
