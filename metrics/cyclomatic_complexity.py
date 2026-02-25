@@ -3,17 +3,15 @@ import csv
 import subprocess
 import xml.etree.ElementTree as ET
 
-# --------------------------------------------------
 # Paths
-# --------------------------------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
 SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
 
 
-# --------------------------------------------------
 # ANT Cyclomatic Complexity
-# --------------------------------------------------
+
 def calculate_ant_cc(filepath):
     tree = ET.parse(filepath)
     root = tree.getroot()
@@ -34,7 +32,7 @@ def calculate_ant_cc(filepath):
         './/uptodate',
         './/isset',
         './/not',
-        './/and',
+        './/and',      
         './/or',
         './/equals',
         './/contains',
@@ -51,10 +49,8 @@ def calculate_ant_cc(filepath):
 
     return cc
 
-
-# --------------------------------------------------
 # MAVEN Cyclomatic Complexity
-# --------------------------------------------------
+
 def calculate_maven_cc(filepath):
     tree = ET.parse(filepath)
     root = tree.getroot()
@@ -69,9 +65,8 @@ def calculate_maven_cc(filepath):
     return cc
 
 
-# --------------------------------------------------
 # GROOVY / GRADLE Cyclomatic Complexity (AST-based)
-# --------------------------------------------------
+
 def calculate_groovy_cc(filepath):
     try:
         groovy_script_path = os.path.join(BASE_DIR, "gradle_cc.groovy")
@@ -99,9 +94,9 @@ def calculate_groovy_cc(filepath):
         print(f"Error running Groovy CC on {filepath}: {e}")
         return 1
 
-# --------------------------------------------------
+
 # Detect Build Type
-# --------------------------------------------------
+
 def detect_build_type(filepath):
     if filepath.endswith(".gradle") or filepath.endswith(".groovy"):
         return "groovy"
@@ -123,10 +118,8 @@ def detect_build_type(filepath):
 
     return None
 
-
-# --------------------------------------------------
 # Integrate Into Summary
-# --------------------------------------------------
+
 def integrate_cc():
     if not os.path.exists(SUMMARY_FILE):
         print("ERROR: summary_metrics.csv not found. Run BLOC analyzer first.")
@@ -181,7 +174,5 @@ def integrate_cc():
 
     print("\nCyclomatic Complexity successfully integrated into summary_metrics.csv")
 
-
-# --------------------------------------------------
 if __name__ == "__main__":
     integrate_cc()

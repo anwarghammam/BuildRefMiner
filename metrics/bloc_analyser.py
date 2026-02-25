@@ -1,9 +1,9 @@
 import os
 import csv
 
-# --------------------------------------------------
+
 # Stable Base Directory
-# --------------------------------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
@@ -16,9 +16,9 @@ os.makedirs(BEFORE_FOLDER, exist_ok=True)
 os.makedirs(AFTER_FOLDER, exist_ok=True)
 
 
-# --------------------------------------------------
-# Process Each File (Robust BLOC Logic)
-# --------------------------------------------------
+
+# Process Each File 
+
 def process_file(filepath, summary_data):
     filename = os.path.basename(filepath)
     name_without_ext = filename.replace(".", "_")
@@ -35,9 +35,10 @@ def process_file(filepath, summary_data):
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    # -------------------------
+   
+   
     # Write BEFORE CSV
-    # -------------------------
+ 
     with open(before_path, "w", newline="", encoding="utf-8") as before_csv:
         writer = csv.writer(before_csv)
         writer.writerow(["Line_Number", "Content"])
@@ -45,9 +46,9 @@ def process_file(filepath, summary_data):
         for i, line in enumerate(lines, 1):
             writer.writerow([i, line.rstrip()])
 
-    # -------------------------
+ 
     # Write AFTER CSV
-    # -------------------------
+
     with open(after_path, "w", newline="", encoding="utf-8") as after_csv:
         writer = csv.writer(after_csv)
         writer.writerow(["Line_Number", "Content", "Is_BLOC", "BLOC_Number"])
@@ -61,9 +62,8 @@ def process_file(filepath, summary_data):
                 writer.writerow([i, original_line, 0, ""])
                 continue
 
-            # --------------------------------------------------
             # Handle XML Multi-line Comments <!-- -->
-            # --------------------------------------------------
+           
             if not in_xml_comment and "<!--" in stripped:
                 if "-->" in stripped:
                     stripped = stripped.split("<!--")[0].strip()
@@ -80,9 +80,9 @@ def process_file(filepath, summary_data):
                 writer.writerow([i, original_line, 0, ""])
                 continue
 
-            # --------------------------------------------------
+           
             # Handle Multi-line Comments /* */
-            # --------------------------------------------------
+       
             if not in_block_comment and "/*" in stripped:
                 if "*/" in stripped:
                     before_comment = stripped.split("/*")[0].strip()
@@ -100,9 +100,9 @@ def process_file(filepath, summary_data):
                 writer.writerow([i, original_line, 0, ""])
                 continue
 
-            # --------------------------------------------------
+            
             # Remove inline single-line comments //
-            # --------------------------------------------------
+            
             if "//" in stripped:
                 stripped = stripped.split("//")[0].strip()
 
@@ -116,9 +116,9 @@ def process_file(filepath, summary_data):
                 writer.writerow([i, original_line, 0, ""])
                 continue
 
-            # --------------------------------------------------
+           
             # Count as BLOC
-            # --------------------------------------------------
+           
             total_bloc += 1
             bloc_number += 1
 
@@ -128,9 +128,9 @@ def process_file(filepath, summary_data):
     print(f"Processed: {filename} | Total BLOC = {total_bloc}")
 
 
-# --------------------------------------------------
+
 # Main Function
-# --------------------------------------------------
+
 def main():
     print("Starting BLOC Analysis...\n")
 
@@ -140,16 +140,16 @@ def main():
 
     summary_data = []
 
-    # -------------------------
+    
     # Process files: gradle, xml, groovy
-    # -------------------------
+    
     for file in os.listdir(INPUT_FOLDER):
         if file.endswith((".gradle", ".xml", ".groovy")):  # Added .groovy
             process_file(os.path.join(INPUT_FOLDER, file), summary_data)
 
-    # -------------------------
+  
     # Write summary CSV
-    # -------------------------
+   
     summary_path = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
     with open(summary_path, "w", newline="", encoding="utf-8") as summary_file:
         writer = csv.writer(summary_file)
@@ -160,8 +160,8 @@ def main():
     print("Check processed_builds folder for results.")
 
 
-# --------------------------------------------------
+
 # Run Script
-# --------------------------------------------------
+
 if __name__ == "__main__":
     main()

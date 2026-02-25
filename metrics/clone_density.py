@@ -3,20 +3,18 @@ import csv
 import re
 from collections import defaultdict
 
-# --------------------------------------------------
 # Paths
-# --------------------------------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FILES_DIR = os.path.join(BASE_DIR, "..", "FilesExamples")
 SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
 
-# Minimum clone block size (paper commonly uses 5)
+# Minimum clone block size 
 MIN_CLONE_LEN = 5
 
 
-# --------------------------------------------------
 # Remove comments (XML + Groovy/Gradle)
-# --------------------------------------------------
+
 def remove_comments(text: str) -> str:
     # XML comments <!-- ... -->
     text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
@@ -33,12 +31,11 @@ def remove_comments(text: str) -> str:
     return text
 
 
-# --------------------------------------------------
 # Normalize lines
 # - trim whitespace
 # - remove empty lines
 # - compress multiple spaces
-# --------------------------------------------------
+
 def normalize_lines(text: str) -> list[str]:
     lines = []
     for raw in text.splitlines():
@@ -50,10 +47,10 @@ def normalize_lines(text: str) -> list[str]:
     return lines
 
 
-# --------------------------------------------------
+
 # Detect cloned lines within a file (Type-I)
 # A line is cloned if it belongs to any k-line window repeated >=2 times.
-# --------------------------------------------------
+
 def detect_cloned_lines(lines: list[str], k: int) -> int:
     n = len(lines)
     if n < k:
@@ -75,10 +72,10 @@ def detect_cloned_lines(lines: list[str], k: int) -> int:
     return len(cloned)
 
 
-# --------------------------------------------------
+
 # Compute Clone Density for one file
 # Clone Density = cloned_lines / total_logic_lines
-# --------------------------------------------------
+
 def compute_clone_density(file_path: str) -> float:
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -95,11 +92,9 @@ def compute_clone_density(file_path: str) -> float:
     return round(cloned_lines / total_logic_lines, 3)
 
 
-# --------------------------------------------------
+
 # Integrate into summary_metrics.csv
-# - Remove any previous clone-related columns
-# - Add only one: Clone_Density
-# --------------------------------------------------
+
 def integrate_clone_density() -> None:
     print("\n=== Running Clone Density Metric ===")
 
@@ -123,8 +118,6 @@ def integrate_clone_density() -> None:
     old_header = rows[0]
     old_body = rows[1:]
 
-    # Remove ANY clone-related columns from header
-    # (handles Clone_Density, CloneDensity_Intra_k5, etc.)
     keep_col_indices = []
     new_header = []
     for idx, col in enumerate(old_header):
