@@ -1,146 +1,161 @@
 import os
 import csv
-import xml.etree.ElementTree as ET
-import re
 import math
+import subprocess
+import xml.etree.ElementTree as ET
+from collections import Counter
 
-# --------------------------------------------------
-# Paths
-# --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FILES_DIR = os.path.join(BASE_DIR, "..", "FilesExamples")
+INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
 SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
 
-# --------------------------------------------------
-# Halstead for XML files (Ant / Maven)
-# --------------------------------------------------
-def halstead_xml(file_path):
+GROOVY_HALSTEAD_SCRIPT = os.path.join(BASE_DIR, "halstead_groovy_ast.groovy")
+
+
+def halstead_from_counts(n1, n2, N1, N2):
+    vocab = n1 + n2
+    length = N1 + N2
+    volume = length * math.log2(vocab) if vocab > 0 and length > 0 else 0.0
+    difficulty = (n1 / 2) * (N2 / n2) if n2 > 0 else 0.0
+    effort = difficulty * volume
+    return round(volume, 2), round(difficulty, 2), round(effort, 2)
+
+
+# ---------------- ANT ----------------
+def ant_counts(filepath):
+    excluded_tags = {"project", "property", "description"}
+    op = Counter()
+    opd = Counter()
+
+    tree = ET.parse(filepath)
+    root = tree.getroot()
+
+    for elem in root.iter():
+        tag = elem.tag.split("}")[-1]
+        if tag in excluded_tags:
+            continue
+
+        op[tag] += 1
+
+        for attr_key, attr_val in elem.attrib.items():
+            if not (tag == "target" and attr_key == "name"):
+                opd[str(attr_val)] += 1
+
+    n1 = len(op)
+    n2 = len(opd)
+    N1 = sum(op.values())
+    N2 = sum(opd.values())
+    return n1, n2, N1, N2
+
+
+# ---------------- MAVEN ----------------
+def maven_counts(filepath):
+    op = Counter()
+    opd = Counter()
+
+    tree = ET.parse(filepath)
+    root = tree.getroot()
+
+    for elem in root.iter():
+        tag = elem.tag.split("}")[-1]
+        op[tag] += 1
+
+        for child in list(elem):
+            child_tag = child.tag.split("}")[-1]
+            opd[child_tag] += 1
+
+    n1 = len(op)
+    n2 = len(opd)
+    N1 = sum(op.values())
+    N2 = sum(opd.values())
+    return n1, n2, N1, N2
+
+
+# ---------------- GROOVY/GRADLE ----------------
+def groovy_counts(filepath):
+    if not os.path.exists(GROOVY_HALSTEAD_SCRIPT):
+        raise FileNotFoundError(f"Missing: {GROOVY_HALSTEAD_SCRIPT}")
+
+    res = subprocess.run(
+        ["groovy", GROOVY_HALSTEAD_SCRIPT, filepath],
+        capture_output=True,
+        text=True
+    )
+
+    if res.returncode != 0:
+        print(f"[GROOVY] Failed on {filepath}\n{res.stderr}")
+        return 0, 0, 0, 0
+
+    out = res.stdout.strip()
+    if not out or "," not in out:
+        print(f"[GROOVY] Unexpected output on {filepath}: {out}")
+        return 0, 0, 0, 0
+
+    n1, n2, N1, N2 = [int(x) for x in out.split(",")]
+    return n1, n2, N1, N2
+
+
+def compute_halstead(filename, filepath):
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        # Keep everything up to the last </project> tag to ignore non-XML content
-        end_index = content.rfind("</project>")
-        if end_index == -1:
-            print(f"ERROR: No </project> tag found in {file_path}")
-            return 0
-        content = content[:end_index + len("</project>")]
+        if filename == "build.xml":
+            n1, n2, N1, N2 = ant_counts(filepath)
+        elif filename == "pom.xml":
+            n1, n2, N1, N2 = maven_counts(filepath)
+        elif filename.endswith(".gradle") or filename.endswith(".groovy"):
+            n1, n2, N1, N2 = groovy_counts(filepath)
+        else:
+            return 0.0
 
-        root = ET.fromstring(content)
-        operators = []
-        operands = []
+        volume, _, _ = halstead_from_counts(n1, n2, N1, N2)
+        print(f"{filename} | Halstead Volume = {volume} (n1={n1}, n2={n2}, N1={N1}, N2={N2})")
+        return volume
 
-        def traverse(elem):
-            operators.append(elem.tag)
-            for key, value in elem.attrib.items():
-                operands.append(key)
-                operands.append(value)
-            if elem.text and elem.text.strip():
-                operands.append(elem.text.strip())
-            for child in elem:
-                operands.append(child.tag)
-                traverse(child)
-
-        traverse(root)
-
-        n1 = len(set(operators))
-        n2 = len(set(operands))
-        N1 = len(operators)
-        N2 = len(operands)
-        if n1 + n2 == 0:
-            return 0
-        return int((N1 + N2) * math.log2(n1 + n2))
-
+    except ET.ParseError as e:
+        print(f"[XML] Parse error in {filename}: {e}")
+        return 0.0
     except Exception as e:
-        print(f"Error parsing XML {file_path}: {e}")
-        return 0
+        print(f"[ERROR] {filename}: {e}")
+        return 0.0
 
-# --------------------------------------------------
-# Halstead for Gradle DSL
-# --------------------------------------------------
-def halstead_gradle(file_path):
-    try:
-        operators = []
-        operands = []
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("//"):
-                    continue
-                # operators = keywords, method names, closures
-                op_matches = re.findall(r"\b(def|class|if|else|for|while|println|apply|plugins)\b", line)
-                operators.extend(op_matches)
-                # operands = variable names and string literals
-                operand_matches = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", line)
-                string_matches = re.findall(r'"(.*?)"', line)
-                operands.extend(operand_matches)
-                operands.extend(string_matches)
 
-        n1 = len(set(operators))
-        n2 = len(set(operands))
-        N1 = len(operators)
-        N2 = len(operands)
-
-        if n1 + n2 == 0:
-            return 0
-
-        return int((N1 + N2) * math.log2(n1 + n2))
-
-    except Exception as e:
-        print(f"Error parsing Gradle {file_path}: {e}")
-        return 0
-
-# --------------------------------------------------
-# Main: integrate Halstead Volume into summary_metrics.csv
-# --------------------------------------------------
 def integrate_halstead():
     if not os.path.exists(SUMMARY_FILE):
-        print("ERROR: summary_metrics.csv not found. Run BLOC + CC + CF first.")
+        print("ERROR: summary_metrics.csv not found. Run BLOC analyzer first.")
         return
 
-    # Read existing summary
     with open(SUMMARY_FILE, "r", encoding="utf-8") as f:
-        reader = list(csv.reader(f))
+        rows = list(csv.reader(f))
 
-    header = reader[0]
-    rows = reader[1:]
+    header = rows[0]
+    data = rows[1:]
 
     if "Halstead_Volume" not in header:
         header.append("Halstead_Volume")
 
-    updated_rows = []
+    out_rows = []
+    for row in data:
+        filename = row[0]
+        filepath = os.path.join(INPUT_FOLDER, filename)
 
-    for row in rows:
-        # Clean filename (remove ../FilesExamples/ prefix)
-        filename = os.path.basename(row[0])
-        file_path = os.path.join(FILES_DIR, filename)
+        row = row[:len(header) - 1]
 
-        # Debug: check file path exists
-        print(f"Processing file: {file_path} → Exists: {os.path.exists(file_path)}")
+        if not os.path.exists(filepath):
+            row.append(0.0)
+            out_rows.append(row)
+            print(f"{filename} | missing -> Halstead Volume = 0")
+            continue
 
-        hv = 0
-        if os.path.exists(file_path):
-            if filename.endswith(".xml"):
-                hv = halstead_xml(file_path)
-            elif filename.endswith(".gradle"):
-                hv = halstead_gradle(file_path)
-            else:
-                hv = 0
-        else:
-            print(f"Warning: {filename} not found!")
+        volume = compute_halstead(filename, filepath)
+        row.append(volume)
+        out_rows.append(row)
 
-        row = row[:len(header)-1]
-        row.append(hv)
-        updated_rows.append(row)
-        print(f"{filename} → Halstead Volume = {hv}")
-
-    # Write updated CSV
     with open(SUMMARY_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        writer.writerows(updated_rows)
+        w = csv.writer(f)
+        w.writerow(header)
+        w.writerows(out_rows)
 
-    print("\nHalstead Volume successfully added to summary_metrics.csv")
+    print("\n✅ Halstead Volume integrated into summary_metrics.csv")
 
-# --------------------------------------------------
+
 if __name__ == "__main__":
     integrate_halstead()

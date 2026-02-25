@@ -1,121 +1,168 @@
 import os
 import csv
 import re
+from collections import defaultdict
 
-# --------------------------------------------------
 # Paths
-# --------------------------------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FILES_DIR = os.path.join(BASE_DIR, "..", "FilesExamples")
 SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
 
-MIN_CLONE_BLOCK = 3  # minimum repeated block size
+# Minimum clone block size 
+MIN_CLONE_LEN = 5
 
 
-# --------------------------------------------------
-# Remove comments (XML + Gradle)
-# --------------------------------------------------
-def remove_comments(content):
-    # Remove XML comments
-    content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
-    # Remove Gradle single-line comments
-    content = re.sub(r'//.*', '', content)
-    return content
+# Remove comments (XML + Groovy/Gradle)
+
+def remove_comments(text: str) -> str:
+    # XML comments <!-- ... -->
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+    # Groovy/Gradle block comments /* ... */
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+
+    # Single-line comments //
+    text = re.sub(r"//.*", "", text)
+
+    # Optional: lines starting with #
+    text = re.sub(r"^\s*#.*$", "", text, flags=re.MULTILINE)
+
+    return text
 
 
-# --------------------------------------------------
 # Normalize lines
-# --------------------------------------------------
-def normalize_lines(content):
+# - trim whitespace
+# - remove empty lines
+# - compress multiple spaces
+
+def normalize_lines(text: str) -> list[str]:
     lines = []
-    for line in content.splitlines():
-        line = line.strip()
-        if line:
-            line = re.sub(r'\s+', ' ', line)
-            lines.append(line)
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        line = re.sub(r"\s+", " ", line)
+        lines.append(line)
     return lines
 
 
-# --------------------------------------------------
-# Detect duplicated blocks
-# --------------------------------------------------
-def detect_clones(lines):
-    cloned_lines = set()
-    total_lines = len(lines)
 
-    for i in range(total_lines):
-        for j in range(i + MIN_CLONE_BLOCK, total_lines):
-            block1 = lines[i:i+MIN_CLONE_BLOCK]
-            block2 = lines[j:j+MIN_CLONE_BLOCK]
+# Detect cloned lines within a file (Type-I)
+# A line is cloned if it belongs to any k-line window repeated >=2 times.
 
-            if block1 == block2 and len(block1) == MIN_CLONE_BLOCK:
-                for k in range(MIN_CLONE_BLOCK):
-                    cloned_lines.add(i+k)
-                    cloned_lines.add(j+k)
+def detect_cloned_lines(lines: list[str], k: int) -> int:
+    n = len(lines)
+    if n < k:
+        return 0
 
-    return len(cloned_lines)
+    windows = defaultdict(list)
+
+    for i in range(n - k + 1):
+        window = tuple(lines[i : i + k])
+        windows[window].append(i)
+
+    cloned = set()
+    for starts in windows.values():
+        if len(starts) >= 2:
+            for s in starts:
+                for idx in range(s, s + k):
+                    cloned.add(idx)
+
+    return len(cloned)
 
 
-# --------------------------------------------------
+
 # Compute Clone Density for one file
-# --------------------------------------------------
-def compute_clone_density(file_path):
+# Clone Density = cloned_lines / total_logic_lines
+
+def compute_clone_density(file_path: str) -> float:
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
     content = remove_comments(content)
     lines = normalize_lines(content)
 
-    if len(lines) == 0:
-        return 0
+    if not lines:
+        return 0.0
 
-    cloned = detect_clones(lines)
-    bloc = len(lines)
+    cloned_lines = detect_cloned_lines(lines, MIN_CLONE_LEN)
+    total_logic_lines = len(lines)
 
-    return round(cloned / bloc, 3)
+    return round(cloned_lines / total_logic_lines, 3)
 
 
-# --------------------------------------------------
+
 # Integrate into summary_metrics.csv
-# --------------------------------------------------
-def integrate_clone_density():
+
+def integrate_clone_density() -> None:
+    print("\n=== Running Clone Density Metric ===")
+
     if not os.path.exists(SUMMARY_FILE):
-        print("summary_metrics.csv not found.")
+        print(f"ERROR: summary_metrics.csv not found at: {SUMMARY_FILE}")
+        print("Run BLOC first to create the summary file.")
         return
 
+    if not os.path.exists(FILES_DIR):
+        print(f"ERROR: FilesExamples folder not found at: {FILES_DIR}")
+        return
+
+    # Read CSV
     with open(SUMMARY_FILE, "r", encoding="utf-8") as f:
-        reader = list(csv.reader(f))
+        rows = list(csv.reader(f))
 
-    header = reader[0]
-    rows = reader[1:]
+    if not rows:
+        print("ERROR: summary_metrics.csv is empty.")
+        return
 
-    if "Clone_Density" not in header:
-        header.append("Clone_Density")
+    old_header = rows[0]
+    old_body = rows[1:]
+
+    keep_col_indices = []
+    new_header = []
+    for idx, col in enumerate(old_header):
+        if re.search(r"clone", col, flags=re.IGNORECASE):
+            continue
+        keep_col_indices.append(idx)
+        new_header.append(col)
+
+    # Add final single clone column
+    new_header.append("Clone_Density")
 
     updated_rows = []
 
-    for row in rows:
-        filename = os.path.basename(row[0])
+    for row in old_body:
+        if not row:
+            continue
+
+        # Build cleaned row keeping only non-clone columns (safe if row shorter)
+        cleaned = []
+        for idx in keep_col_indices:
+            cleaned.append(row[idx] if idx < len(row) else "")
+
+        filename = os.path.basename(cleaned[0]) if cleaned else ""
         file_path = os.path.join(FILES_DIR, filename)
 
-        if os.path.exists(file_path):
+        if filename and os.path.exists(file_path):
             cd = compute_clone_density(file_path)
         else:
-            cd = 0
+            cd = 0.0
 
-        row = row[:len(header)-1]
-        row.append(cd)
-        updated_rows.append(row)
+        cleaned.append(str(cd))
+        updated_rows.append(cleaned)
 
-        print(f"{filename} → Clone Density = {cd}")
+        print(f"{filename} -> Clone Density = {cd}")
 
+    # Write back
     with open(SUMMARY_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        writer.writerows(updated_rows)
+        w = csv.writer(f)
+        w.writerow(new_header)
+        w.writerows(updated_rows)
 
-    print("\nClone Density successfully added.")
+    print("\n✅ Clone Density added as a single column: Clone_Density")
+    print(f"Updated file: {SUMMARY_FILE}")
 
 
+# --------------------------------------------------
 if __name__ == "__main__":
     integrate_clone_density()

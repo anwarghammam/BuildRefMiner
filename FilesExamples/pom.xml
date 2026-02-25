@@ -21,6 +21,44 @@
     </dependency>
   </dependencies>
 
+  <!-- ===== Added duplicate fragments for Clone Density demo ===== -->
+  <profiles>
+    <profile>
+      <id>cloneProfileA</id>
+
+      <!-- identical 5-line clone chunk starts here -->
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <demo.clone>YES</demo.clone>
+      </properties>
+      <!-- identical 5-line clone chunk ends here -->
+
+      <build>
+        <finalName>clone-demo</finalName>
+      </build>
+    </profile>
+
+    <profile>
+      <id>cloneProfileB</id>
+
+      <!-- identical 5-line clone chunk starts here -->
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <demo.clone>YES</demo.clone>
+      </properties>
+      <!-- identical 5-line clone chunk ends here -->
+
+      <build>
+        <finalName>clone-demo</finalName>
+      </build>
+    </profile>
+  </profiles>
+  <!-- ============================================================ -->
+
   <build>
     <plugins>
       <plugin>
@@ -34,9 +72,3 @@
     </plugins>
   </build>
 </project>
-
-// Dummy CF test commit: CF Test commit 1 for pom.xml
-
-// Dummy CF test commit: CF Test commit 2 for pom.xml
-
-// Dummy CF test commit: CF Test commit 3 for pom.xml

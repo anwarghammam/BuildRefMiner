@@ -1,71 +1,81 @@
 import os
 import csv
+from collections import defaultdict
 from pydriller import Repository
 
-# --------------------------------------------------
+
 # Paths
-# --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_DIR = os.path.join(BASE_DIR, "..")
-SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
+REPO_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+SUMMARY_FILE = os.path.join(REPO_DIR, "processed_builds", "summary_metrics.csv")
 
-BUILD_EXTENSIONS = [".xml", ".gradle"]
+BUILD_FILENAMES = {
+    "build.xml",          # Ant
+    "pom.xml",            # Maven
+    "build.gradle",       # Gradle
+    "TestScript.groovy",  # Groovy 
+}
 
-# --------------------------------------------------
-def calculate_churn():
-    churn_per_file = {}
+def calculate_churn(repo_dir: str) -> dict:
+    churn_per_file = defaultdict(int)
 
-    for commit in Repository(REPO_DIR).traverse_commits():
+    for commit in Repository(repo_dir).traverse_commits():
         for mod in commit.modified_files:
+            path = mod.new_path or mod.old_path
+            if not path:
+                continue
 
-            if mod.filename and any(mod.filename.endswith(ext) for ext in BUILD_EXTENSIONS):
+            base = os.path.basename(path)
 
-                filename = mod.filename
-                added = mod.added_lines or 0
-                deleted = mod.deleted_lines or 0
-                churn_value = added + deleted
+            if base not in BUILD_FILENAMES:
+                continue
 
-                churn_per_file[filename] = churn_per_file.get(filename, 0) + churn_value
+            added = mod.added_lines or 0
+            deleted = mod.deleted_lines or 0
+            churn_per_file[base] += (added + deleted)
 
-    return churn_per_file
+    return dict(churn_per_file)
 
-
-# --------------------------------------------------
 def integrate_churn():
     if not os.path.exists(SUMMARY_FILE):
-        print("summary_metrics.csv not found.")
+        print("ERROR: summary_metrics.csv not found. Run BLOC analyzer first.")
         return
 
-    churn_data = calculate_churn()
+    churn_data = calculate_churn(REPO_DIR)
 
     with open(SUMMARY_FILE, "r", encoding="utf-8") as f:
-        reader = list(csv.reader(f))
+        rows = list(csv.reader(f))
 
-    header = reader[0]
-    rows = reader[1:]
+    if not rows:
+        print("ERROR: summary_metrics.csv is empty.")
+        return
+
+    header = rows[0]
+    body = rows[1:]
 
     if "Churn" not in header:
         header.append("Churn")
 
-    updated_rows = []
+    out_rows = []
+    for row in body:
+        if not row:
+            continue
 
-    for row in rows:
-        filename = os.path.basename(row[0])
+        filename = os.path.basename(row[0]) 
         churn_value = churn_data.get(filename, 0)
 
-        row = row[:len(header)-1]
+        row = row[:len(header) - 1]
         row.append(churn_value)
-        updated_rows.append(row)
+        out_rows.append(row)
 
         print(f"{filename} → Churn = {churn_value}")
 
     with open(SUMMARY_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        writer.writerows(updated_rows)
+        w = csv.writer(f)
+        w.writerow(header)
+        w.writerows(out_rows)
 
-    print("\nChurn successfully added.")
-
+    print("\n  Churn successfully added to summary_metrics.csv")
 
 if __name__ == "__main__":
     integrate_churn()

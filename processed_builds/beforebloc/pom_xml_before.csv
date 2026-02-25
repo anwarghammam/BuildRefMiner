@@ -22,22 +22,54 @@ Line_Number,Content
 21,    </dependency>
 22,  </dependencies>
 23,
-24,  <build>
-25,    <plugins>
-26,      <plugin>
-27,        <groupId>org.apache.maven.plugins</groupId>
-28,        <artifactId>maven-compiler-plugin</artifactId>
-29,      </plugin>
-30,      <plugin>
-31,        <groupId>org.apache.maven.plugins</groupId>
-32,        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->
-33,      </plugin>
-34,    </plugins>
-35,  </build>
-36,</project>
+24,  <!-- ===== Added duplicate fragments for Clone Density demo ===== -->
+25,  <profiles>
+26,    <profile>
+27,      <id>cloneProfileA</id>
+28,
+29,      <!-- identical 5-line clone chunk starts here -->
+30,      <activation>
+31,        <activeByDefault>true</activeByDefault>
+32,      </activation>
+33,      <properties>
+34,        <demo.clone>YES</demo.clone>
+35,      </properties>
+36,      <!-- identical 5-line clone chunk ends here -->
 37,
-38,// Dummy CF test commit: CF Test commit 1 for pom.xml
-39,
-40,// Dummy CF test commit: CF Test commit 2 for pom.xml
-41,
-42,// Dummy CF test commit: CF Test commit 3 for pom.xml
+38,      <build>
+39,        <finalName>clone-demo</finalName>
+40,      </build>
+41,    </profile>
+42,
+43,    <profile>
+44,      <id>cloneProfileB</id>
+45,
+46,      <!-- identical 5-line clone chunk starts here -->
+47,      <activation>
+48,        <activeByDefault>true</activeByDefault>
+49,      </activation>
+50,      <properties>
+51,        <demo.clone>YES</demo.clone>
+52,      </properties>
+53,      <!-- identical 5-line clone chunk ends here -->
+54,
+55,      <build>
+56,        <finalName>clone-demo</finalName>
+57,      </build>
+58,    </profile>
+59,  </profiles>
+60,  <!-- ============================================================ -->
+61,
+62,  <build>
+63,    <plugins>
+64,      <plugin>
+65,        <groupId>org.apache.maven.plugins</groupId>
+66,        <artifactId>maven-compiler-plugin</artifactId>
+67,      </plugin>
+68,      <plugin>
+69,        <groupId>org.apache.maven.plugins</groupId>
+70,        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->
+71,      </plugin>
+72,    </plugins>
+73,  </build>
+74,</project>

@@ -1,9 +1,9 @@
 import os
 import csv
 
-# --------------------------------------------------
-# Stable Base Directory (works from anywhere)
-# --------------------------------------------------
+
+# Stable Base Directory
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
@@ -12,35 +12,13 @@ OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
 BEFORE_FOLDER = os.path.join(OUTPUT_FOLDER, "beforebloc")
 AFTER_FOLDER = os.path.join(OUTPUT_FOLDER, "afterbloc")
 
-# Create output folders if they don't exist
 os.makedirs(BEFORE_FOLDER, exist_ok=True)
 os.makedirs(AFTER_FOLDER, exist_ok=True)
 
 
-# --------------------------------------------------
-# BLOC Logic
-# --------------------------------------------------
-def is_bloc(line):
-    stripped = line.strip()
 
-    # Ignore empty lines
-    if not stripped:
-        return 0
+# Process Each File 
 
-    # Ignore single-line comments
-    if stripped.startswith("//") or stripped.startswith("#"):
-        return 0
-
-    # Ignore XML single-line comments
-    if stripped.startswith("<!--") and stripped.endswith("-->"):
-        return 0
-
-    return 1
-
-
-# --------------------------------------------------
-# Process Each File
-# --------------------------------------------------
 def process_file(filepath, summary_data):
     filename = os.path.basename(filepath)
     name_without_ext = filename.replace(".", "_")
@@ -49,14 +27,18 @@ def process_file(filepath, summary_data):
     after_path = os.path.join(AFTER_FOLDER, f"{name_without_ext}_after.csv")
 
     total_bloc = 0
-    bloc_counter = 0  # NEW: sequential BLOC numbering
+    bloc_number = 0
+
+    in_xml_comment = False
+    in_block_comment = False  # For /* */
 
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    # -------------------------
+   
+   
     # Write BEFORE CSV
-    # -------------------------
+ 
     with open(before_path, "w", newline="", encoding="utf-8") as before_csv:
         writer = csv.writer(before_csv)
         writer.writerow(["Line_Number", "Content"])
@@ -64,33 +46,91 @@ def process_file(filepath, summary_data):
         for i, line in enumerate(lines, 1):
             writer.writerow([i, line.rstrip()])
 
-    # -------------------------
-    # Write AFTER CSV (UPDATED)
-    # -------------------------
+ 
+    # Write AFTER CSV
+
     with open(after_path, "w", newline="", encoding="utf-8") as after_csv:
         writer = csv.writer(after_csv)
         writer.writerow(["Line_Number", "Content", "Is_BLOC", "BLOC_Number"])
 
         for i, line in enumerate(lines, 1):
-            bloc_flag = is_bloc(line)
+            original_line = line.rstrip()
+            stripped = line.strip()
 
-            if bloc_flag == 1:
-                bloc_counter += 1
-                bloc_number = bloc_counter
-                total_bloc += 1
-            else:
-                bloc_number = ""
+            # Skip empty lines
+            if not stripped:
+                writer.writerow([i, original_line, 0, ""])
+                continue
 
-            writer.writerow([i, line.rstrip(), bloc_flag, bloc_number])
+            # Handle XML Multi-line Comments <!-- -->
+           
+            if not in_xml_comment and "<!--" in stripped:
+                if "-->" in stripped:
+                    stripped = stripped.split("<!--")[0].strip()
+                    if not stripped:
+                        writer.writerow([i, original_line, 0, ""])
+                        continue
+                else:
+                    in_xml_comment = True
+                    writer.writerow([i, original_line, 0, ""])
+                    continue
+            elif in_xml_comment:
+                if "-->" in stripped:
+                    in_xml_comment = False
+                writer.writerow([i, original_line, 0, ""])
+                continue
+
+           
+            # Handle Multi-line Comments /* */
+       
+            if not in_block_comment and "/*" in stripped:
+                if "*/" in stripped:
+                    before_comment = stripped.split("/*")[0].strip()
+                    if not before_comment:
+                        writer.writerow([i, original_line, 0, ""])
+                        continue
+                    stripped = before_comment
+                else:
+                    in_block_comment = True
+                    writer.writerow([i, original_line, 0, ""])
+                    continue
+            elif in_block_comment:
+                if "*/" in stripped:
+                    in_block_comment = False
+                writer.writerow([i, original_line, 0, ""])
+                continue
+
+            
+            # Remove inline single-line comments //
+            
+            if "//" in stripped:
+                stripped = stripped.split("//")[0].strip()
+
+            # Remove full-line # comments
+            if stripped.startswith("#"):
+                writer.writerow([i, original_line, 0, ""])
+                continue
+
+            # If nothing remains after stripping
+            if not stripped:
+                writer.writerow([i, original_line, 0, ""])
+                continue
+
+           
+            # Count as BLOC
+           
+            total_bloc += 1
+            bloc_number += 1
+
+            writer.writerow([i, original_line, 1, bloc_number])
 
     summary_data.append([filename, total_bloc])
-
     print(f"Processed: {filename} | Total BLOC = {total_bloc}")
 
 
-# --------------------------------------------------
+
 # Main Function
-# --------------------------------------------------
+
 def main():
     print("Starting BLOC Analysis...\n")
 
@@ -100,26 +140,28 @@ def main():
 
     summary_data = []
 
+    
+    # Process files: gradle, xml, groovy
+    
     for file in os.listdir(INPUT_FOLDER):
-        if file.endswith((".gradle", ".xml")):
+        if file.endswith((".gradle", ".xml", ".groovy")):  # Added .groovy
             process_file(os.path.join(INPUT_FOLDER, file), summary_data)
 
-    # -------------------------
-    # Write Summary CSV
-    # -------------------------
+  
+    # Write summary CSV
+   
     summary_path = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
-
     with open(summary_path, "w", newline="", encoding="utf-8") as summary_file:
         writer = csv.writer(summary_file)
         writer.writerow(["File_Name", "BLOC"])
         writer.writerows(summary_data)
 
     print("\nBLOC Analysis Completed.")
-    print("Check 'processed_builds/beforebloc' and 'processed_builds/afterbloc' for results.")
+    print("Check processed_builds folder for results.")
 
 
-# --------------------------------------------------
+
 # Run Script
-# --------------------------------------------------
+
 if __name__ == "__main__":
     main()

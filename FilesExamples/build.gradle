@@ -13,6 +13,40 @@ class BuildScriptSimulation {
         spanning multiple lines
         It should be ignored by the BLOC analyzer
         */
+
+        def env = "prod"
+
+        if (env == "prod") {
+            println "Production mode"
+        }
+
+        switch(env) {
+            case "dev":
+                println "Development"
+                break
+            case "prod":
+                println "Production"
+                break
+        }
+
+        // ===== Added duplicate fragments for Clone Density demo =====
+        def cloneTaskA = {
+            def y = 2
+            if (y > 0) {
+                println "CLONE"
+            }
+            println "END"
+        }
+
+        def cloneTaskB = {
+            def y = 2
+            if (y > 0) {
+                println "CLONE"
+            }
+            println "END"
+        }
+        // ============================================================
+
         println "End of method"
     }
 
@@ -26,7 +60,5 @@ class BuildScriptSimulation {
 }
 
 // Dummy CF test commit: CF Test commit 1 for build.gradle
-
 // Dummy CF test commit: CF Test commit 2 for build.gradle
-
 // Dummy CF test commit: CF Test commit 3 for build.gradle

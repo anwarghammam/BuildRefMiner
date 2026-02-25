@@ -1,4 +1,5 @@
-File_Name,BLOC,Cyclomatic_Complexity,Change_Frequency,Halstead_Volume,Churn,Clone_Density
-build.xml,23,5,5,367,95,0.0
-pom.xml,32,4,6,276,176,0.276
-build.gradle,21,4,5,680,116,0.0
+File_Name,BLOC,Change_Frequency,Churn,Cyclomatic_Complexity,Halstead_Volume,Change_Frequency,Clone_Density
+build.xml,33,7,119,5,181.52,7,0.364
+pom.xml,55,8,268,5,401.82,8,0.364
+TestScript.groovy,24,3,75,3,188.02,3,0.5
+build.gradle,42,7,178,6,407.27,7,0.286

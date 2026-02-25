@@ -14,20 +14,52 @@ Line_Number,Content
 13,        spanning multiple lines
 14,        It should be ignored by the BLOC analyzer
 15,        */
-16,"        println ""End of method"""
-17,    }
+16,
+17,"        def env = ""prod"""
 18,
-19,    class bad_class_name { // Violates ClassName rule
-20,"        String BAD_FIELD_NAME = ""oops"" // Violates FieldName rule"
-21,
-22,"        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule"
-23,            println BAD_FIELD_NAME
-24,        }
-25,    }
-26,}
-27,
-28,// Dummy CF test commit: CF Test commit 1 for build.gradle
-29,
-30,// Dummy CF test commit: CF Test commit 2 for build.gradle
+19,"        if (env == ""prod"") {"
+20,"            println ""Production mode"""
+21,        }
+22,
+23,        switch(env) {
+24,"            case ""dev"":"
+25,"                println ""Development"""
+26,                break
+27,"            case ""prod"":"
+28,"                println ""Production"""
+29,                break
+30,        }
 31,
-32,// Dummy CF test commit: CF Test commit 3 for build.gradle
+32,        // ===== Added duplicate fragments for Clone Density demo =====
+33,        def cloneTaskA = {
+34,            def y = 2
+35,            if (y > 0) {
+36,"                println ""CLONE"""
+37,            }
+38,"            println ""END"""
+39,        }
+40,
+41,        def cloneTaskB = {
+42,            def y = 2
+43,            if (y > 0) {
+44,"                println ""CLONE"""
+45,            }
+46,"            println ""END"""
+47,        }
+48,        // ============================================================
+49,
+50,"        println ""End of method"""
+51,    }
+52,
+53,    class bad_class_name { // Violates ClassName rule
+54,"        String BAD_FIELD_NAME = ""oops"" // Violates FieldName rule"
+55,
+56,"        def methodWithTooManyParameters(paramOne, paramTwo, paramThree, paramFour, paramFive, paramSix) { // ParameterName rule"
+57,            println BAD_FIELD_NAME
+58,        }
+59,    }
+60,}
+61,
+62,// Dummy CF test commit: CF Test commit 1 for build.gradle
+63,// Dummy CF test commit: CF Test commit 2 for build.gradle
+64,// Dummy CF test commit: CF Test commit 3 for build.gradle
