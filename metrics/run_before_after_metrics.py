@@ -107,12 +107,22 @@ def write_summary(rows: list[dict]) -> None:
         "Change_Frequency_After",
     ]
 
-    with open(SUMMARY_CSV, "w", newline="", encoding="utf-8") as f:
+    file_exists = os.path.exists(SUMMARY_CSV)
+    write_header = True
+
+    if file_exists and os.path.getsize(SUMMARY_CSV) > 0:
+        write_header = False
+
+    with open(SUMMARY_CSV, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=header)
-        writer.writeheader()
+
+        if write_header:
+            writer.writeheader()
+
         writer.writerows(rows)
 
-    print(f"\nSummary written to: {SUMMARY_CSV}")
+    print(f"\nResults appended to: {SUMMARY_CSV}")
+
 
 
 def cleanup_temp_files(*paths):
