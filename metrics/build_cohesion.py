@@ -4,9 +4,6 @@ import csv
 import xml.etree.ElementTree as ET
 from itertools import combinations
 
-# --------------------------------------------------
-# Paths
-# --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 FILES_DIR = os.path.join(PROJECT_ROOT, "FilesExamples")
@@ -14,9 +11,6 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_builds")
 OUTPUT_CSV = os.path.join(OUTPUT_DIR, "build_cohesion.csv")
 
 
-# --------------------------------------------------
-# Helpers
-# --------------------------------------------------
 def safe_write_csv(path, rows, fieldnames):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -57,28 +51,33 @@ def strip_gradle_comments(text):
     return text
 
 
-def get_module_label(file_path):
-    """
-    Returns a clean label for output.
-    Example:
-      FilesExamples/gradle_multi/app/build.gradle -> gradle_multi/app
-      FilesExamples/pom.xml -> pom.xml
-    """
-    rel_path = os.path.relpath(file_path, FILES_DIR)
-    parent = os.path.dirname(rel_path)
-    filename = os.path.basename(file_path)
+def clean_xml_for_parsing(file_path):
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
 
-    if filename.endswith(".gradle") or filename.endswith(".gradle.kts"):
-        if parent and parent != ".":
-            return parent.replace("\\", "/")
-        return filename
+        closing_tag = "</project>"
+        idx = content.rfind(closing_tag)
+        if idx != -1:
+            content = content[: idx + len(closing_tag)]
 
-    return rel_path.replace("\\", "/")
+        return content
+    except Exception:
+        return None
 
 
-# --------------------------------------------------
-# Gradle cohesion
-# --------------------------------------------------
+def parse_xml_root(file_path):
+    try:
+        cleaned = clean_xml_for_parsing(file_path)
+        if not cleaned:
+            return None
+        return ET.fromstring(cleaned)
+    except Exception:
+        return None
+
+
+# Gradle/Groovy cohesion
+
 def parse_gradle_task_blocks(text):
     patterns = [
         r'\btask\s+([A-Za-z_]\w*)\s*\{',
@@ -95,9 +94,13 @@ def parse_gradle_task_blocks(text):
     matches.sort(key=lambda x: x[0])
 
     task_blocks = []
-    for _, block_start, task_name in matches:
+    for start_pos, _, task_name in matches:
+        open_brace = text.find("{", start_pos)
+        if open_brace == -1:
+            continue
+
         brace_count = 1
-        i = block_start
+        i = open_brace + 1
 
         while i < len(text) and brace_count > 0:
             if text[i] == "{":
@@ -106,7 +109,7 @@ def parse_gradle_task_blocks(text):
                 brace_count -= 1
             i += 1
 
-        block = text[block_start:i]
+        block = text[start_pos:i]
         task_blocks.append((task_name, block))
 
     return task_blocks
@@ -164,84 +167,76 @@ def analyze_gradle_file(file_path):
             feature_sets.append(features)
 
     return {
-        "Module": get_module_label(file_path),
-        "File": os.path.relpath(file_path, FILES_DIR).replace("\\", "/"),
+        "Module": os.path.basename(file_path),
         "Build System": "Gradle",
         "Task Count": len(task_blocks),
         "Build Cohesion": average_pairwise_jaccard(feature_sets),
     }
 
 
-# --------------------------------------------------
+
 # Maven cohesion
-# --------------------------------------------------
+
 def maven_execution_feature_sets(file_path):
     feature_sets = []
+    root = parse_xml_root(file_path)
+    if root is None:
+        return feature_sets
 
-    try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
+    for plugin in root.iter():
+        if strip_xml_namespace(plugin.tag) != "plugin":
+            continue
 
-        for plugin in root.iter():
-            if strip_xml_namespace(plugin.tag) != "plugin":
-                continue
+        plugin_artifact = None
 
-            plugin_artifact = None
+        for child in plugin:
+            tag = strip_xml_namespace(child.tag)
 
-            for child in plugin:
-                tag = strip_xml_namespace(child.tag)
+            if tag == "artifactId" and child.text:
+                plugin_artifact = child.text.strip()
 
-                if tag == "artifactId" and child.text:
-                    plugin_artifact = child.text.strip()
+            elif tag == "executions":
+                for execution in child:
+                    if strip_xml_namespace(execution.tag) != "execution":
+                        continue
 
-                elif tag == "executions":
-                    for execution in child:
-                        if strip_xml_namespace(execution.tag) != "execution":
-                            continue
+                    features = set()
 
-                        features = set()
+                    if plugin_artifact:
+                        features.add(f"plugin:{plugin_artifact}")
 
-                        if plugin_artifact:
-                            features.add(f"plugin:{plugin_artifact}")
+                    for ex_child in execution:
+                        ex_tag = strip_xml_namespace(ex_child.tag)
 
-                        for ex_child in execution:
-                            ex_tag = strip_xml_namespace(ex_child.tag)
+                        if ex_tag == "goals":
+                            for goal in ex_child:
+                                if goal.text:
+                                    features.add(f"goal:{goal.text.strip()}")
 
-                            if ex_tag == "goals":
-                                for goal in ex_child:
-                                    if goal.text:
-                                        features.add(f"goal:{goal.text.strip()}")
+                        elif ex_tag == "configuration":
+                            for conf in ex_child.iter():
+                                conf_tag = strip_xml_namespace(conf.tag)
+                                if conf_tag != "configuration":
+                                    features.add(f"config:{conf_tag}")
 
-                            elif ex_tag == "configuration":
-                                for conf in ex_child.iter():
-                                    conf_tag = strip_xml_namespace(conf.tag)
-                                    if conf_tag != "configuration":
-                                        features.add(f"config:{conf_tag}")
-
-                        if features:
-                            feature_sets.append(features)
-
-    except Exception:
-        pass
+                    if features:
+                        feature_sets.append(features)
 
     return feature_sets
 
 
 def analyze_maven_file(file_path):
     feature_sets = maven_execution_feature_sets(file_path)
-
     return {
-        "Module": get_module_label(file_path),
-        "File": os.path.relpath(file_path, FILES_DIR).replace("\\", "/"),
+        "Module": os.path.basename(file_path),
         "Build System": "Maven",
         "Task Count": len(feature_sets),
         "Build Cohesion": average_pairwise_jaccard(feature_sets),
     }
 
 
-# --------------------------------------------------
 # Ant cohesion
-# --------------------------------------------------
+
 def ant_target_feature_set(target_elem):
     features = set()
 
@@ -269,74 +264,46 @@ def ant_target_feature_set(target_elem):
 
 def analyze_ant_file(file_path):
     feature_sets = []
+    root = parse_xml_root(file_path)
+    if root is None:
+        return {
+            "Module": os.path.basename(file_path),
+            "Build System": "Ant",
+            "Task Count": 0,
+            "Build Cohesion": 0.0,
+        }
 
-    try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
-
-        for elem in root:
-            if strip_xml_namespace(elem.tag) == "target":
-                features = ant_target_feature_set(elem)
-                if features:
-                    feature_sets.append(features)
-
-    except Exception:
-        pass
+    for elem in root:
+        if strip_xml_namespace(elem.tag) == "target":
+            features = ant_target_feature_set(elem)
+            if features:
+                feature_sets.append(features)
 
     return {
-        "Module": get_module_label(file_path),
-        "File": os.path.relpath(file_path, FILES_DIR).replace("\\", "/"),
+        "Module": os.path.basename(file_path),
         "Build System": "Ant",
         "Task Count": len(feature_sets),
         "Build Cohesion": average_pairwise_jaccard(feature_sets),
     }
 
 
-# --------------------------------------------------
-# Dispatcher
-# --------------------------------------------------
 def analyze_file(file_path):
-    name = os.path.basename(file_path)
+    name = os.path.basename(file_path).lower()
 
-    if name.endswith(".gradle") or name.endswith(".gradle.kts"):
+    if name.endswith(".gradle") or name.endswith(".gradle.kts") or name.endswith(".groovy"):
         return analyze_gradle_file(file_path)
 
-    if name == "pom.xml":
+    if name.endswith("pom.xml"):
         return analyze_maven_file(file_path)
 
-    if name == "build.xml":
+    if name.endswith("build.xml"):
         return analyze_ant_file(file_path)
 
     return None
 
 
-def main():
-    rows = []
-
-    for dirpath, _, filenames in os.walk(FILES_DIR):
-        for filename in sorted(filenames):
-            full_path = os.path.join(dirpath, filename)
-            result = analyze_file(full_path)
-
-            if result:
-                rows.append(result)
-                print(
-                    f"{result['Module']} | "
-                    f"{result['Build System']} | "
-                    f"Tasks = {result['Task Count']} | "
-                    f"Cohesion = {result['Build Cohesion']}"
-                )
-
-    if rows:
-        safe_write_csv(
-            OUTPUT_CSV,
-            rows,
-            ["Module", "File", "Build System", "Task Count", "Build Cohesion"]
-        )
-        print(f"\nSaved cohesion results to: {OUTPUT_CSV}")
-    else:
-        print("No supported build files found.")
-
-
-if __name__ == "__main__":
-    main()
+def compute_build_cohesion_value(file_path: str) -> float:
+    result = analyze_file(file_path)
+    if not result:
+        return 0.0
+    return float(result.get("Build Cohesion", 0.0))

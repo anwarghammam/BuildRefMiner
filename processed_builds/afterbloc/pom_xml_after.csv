@@ -2,74 +2,74 @@ Line_Number,Content,Is_BLOC,BLOC_Number
 1,<project>,1,1
 2,  <modelVersion>4.0.0</modelVersion>,1,2
 3,,0,
-4,  <GroupId>com.Example</GroupId> <!-- ❌ tag name is not lowercase -->,1,3
-5,  <artifactId>My.App</artifactId> <!-- ❌ contains dot -->,1,4
-6,  <version>1.0.0</version>,1,5
+4,  <GroupId>com.Example</GroupId> <!-- ❌ tag name is not lowercase -->,0,
+5,  <artifactId>My.App</artifactId> <!-- ❌ contains dot -->,0,
+6,  <version>1.0.0</version>,1,3
 7,,0,
 8,  <!-- Multi-line comment,0,
 9,       explaining the properties section,0,
 10,       should be ignored by BLOC -->,0,
-11,  <properties>,1,6
-12,    <Java_Version>17</Java_Version> <!-- ❌ uses underscore and uppercase -->,1,7
-13,    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>,1,8
-14,  </properties>,1,9
+11,  <properties>,1,4
+12,    <Java_Version>17</Java_Version> <!-- ❌ uses underscore and uppercase -->,0,
+13,    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>,1,5
+14,  </properties>,1,6
 15,,0,
-16,  <dependencies>,1,10
-17,    <dependency>,1,11
-18,      <groupId>org.springframework.boot</groupId>,1,12
-19,      <artifactId>spring-boot-starter-web</artifactId>,1,13
-20,      <version></version> <!-- ❌ empty value -->,1,14
-21,    </dependency>,1,15
-22,  </dependencies>,1,16
+16,  <dependencies>,1,7
+17,    <dependency>,1,8
+18,      <groupId>org.springframework.boot</groupId>,1,9
+19,      <artifactId>spring-boot-starter-web</artifactId>,1,10
+20,      <version></version> <!-- ❌ empty value -->,0,
+21,    </dependency>,1,11
+22,  </dependencies>,1,12
 23,,0,
 24,  <!-- ===== Added duplicate fragments for Clone Density demo ===== -->,0,
-25,  <profiles>,1,17
-26,    <profile>,1,18
-27,      <id>cloneProfileA</id>,1,19
+25,  <profiles>,1,13
+26,    <profile>,1,14
+27,      <id>cloneProfileA</id>,1,15
 28,,0,
 29,      <!-- identical 5-line clone chunk starts here -->,0,
-30,      <activation>,1,20
-31,        <activeByDefault>true</activeByDefault>,1,21
-32,      </activation>,1,22
-33,      <properties>,1,23
-34,        <demo.clone>YES</demo.clone>,1,24
-35,      </properties>,1,25
+30,      <activation>,1,16
+31,        <activeByDefault>true</activeByDefault>,1,17
+32,      </activation>,1,18
+33,      <properties>,1,19
+34,        <demo.clone>YES</demo.clone>,1,20
+35,      </properties>,1,21
 36,      <!-- identical 5-line clone chunk ends here -->,0,
 37,,0,
-38,      <build>,1,26
-39,        <finalName>clone-demo</finalName>,1,27
-40,      </build>,1,28
-41,    </profile>,1,29
+38,      <build>,1,22
+39,        <finalName>clone-demo</finalName>,1,23
+40,      </build>,1,24
+41,    </profile>,1,25
 42,,0,
-43,    <profile>,1,30
-44,      <id>cloneProfileB</id>,1,31
+43,    <profile>,1,26
+44,      <id>cloneProfileB</id>,1,27
 45,,0,
 46,      <!-- identical 5-line clone chunk starts here -->,0,
-47,      <activation>,1,32
-48,        <activeByDefault>true</activeByDefault>,1,33
-49,      </activation>,1,34
-50,      <properties>,1,35
-51,        <demo.clone>YES</demo.clone>,1,36
-52,      </properties>,1,37
+47,      <activation>,1,28
+48,        <activeByDefault>true</activeByDefault>,1,29
+49,      </activation>,1,30
+50,      <properties>,1,31
+51,        <demo.clone>YES</demo.clone>,1,32
+52,      </properties>,1,33
 53,      <!-- identical 5-line clone chunk ends here -->,0,
 54,,0,
-55,      <build>,1,38
-56,        <finalName>clone-demo</finalName>,1,39
-57,      </build>,1,40
-58,    </profile>,1,41
-59,  </profiles>,1,42
+55,      <build>,1,34
+56,        <finalName>clone-demo</finalName>,1,35
+57,      </build>,1,36
+58,    </profile>,1,37
+59,  </profiles>,1,38
 60,  <!-- ============================================================ -->,0,
 61,,0,
-62,  <build>,1,43
-63,    <plugins>,1,44
-64,      <plugin>,1,45
-65,        <groupId>org.apache.maven.plugins</groupId>,1,46
-66,        <artifactId>maven-compiler-plugin</artifactId>,1,47
-67,      </plugin>,1,48
-68,      <plugin>,1,49
-69,        <groupId>org.apache.maven.plugins</groupId>,1,50
-70,        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->,1,51
-71,      </plugin>,1,52
-72,    </plugins>,1,53
-73,  </build>,1,54
-74,</project>,1,55
+62,  <build>,1,39
+63,    <plugins>,1,40
+64,      <plugin>,1,41
+65,        <groupId>org.apache.maven.plugins</groupId>,1,42
+66,        <artifactId>maven-compiler-plugin</artifactId>,1,43
+67,      </plugin>,1,44
+68,      <plugin>,1,45
+69,        <groupId>org.apache.maven.plugins</groupId>,1,46
+70,        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->,0,
+71,      </plugin>,1,47
+72,    </plugins>,1,48
+73,  </build>,1,49
+74,</project>,1,50

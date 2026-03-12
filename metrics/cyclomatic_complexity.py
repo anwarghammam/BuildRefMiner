@@ -4,68 +4,129 @@ import subprocess
 import xml.etree.ElementTree as ET
 
 # Paths
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
 SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
 
 
+
+# XML cleaning helper
+# Keeps only content up to the final </project>
+
+def clean_xml_for_parsing(filepath):
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        closing_tag = "</project>"
+        idx = content.rfind(closing_tag)
+
+        if idx != -1:
+            content = content[: idx + len(closing_tag)]
+
+        return content
+    except Exception as e:
+        print(f"Error cleaning XML file {filepath}: {e}")
+        return None
+
+
+# Safe XML parse helper
+
+def safe_parse_xml(filepath):
+    try:
+        cleaned_content = clean_xml_for_parsing(filepath)
+        if cleaned_content is None:
+            return None
+
+        root = ET.fromstring(cleaned_content)
+        return ET.ElementTree(root)
+
+    except ET.ParseError as e:
+        print(f"XML Parse Error in {filepath}: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected XML Error in {filepath}: {e}")
+        return None
+
+
+
+# Namespace-safe local tag extractor
+
+def local_name(tag):
+    if "}" in tag:
+        return tag.split("}", 1)[1]
+    return tag
+
+
+
 # ANT Cyclomatic Complexity
 
 def calculate_ant_cc(filepath):
-    tree = ET.parse(filepath)
+    tree = safe_parse_xml(filepath)
+    if tree is None:
+        return 0
+
     root = tree.getroot()
+    cc = 1
 
-    cc = 1  # Base complexity
+    for elem in root.iter():
+        if local_name(elem.tag) == "target":
+            if "if" in elem.attrib:
+                cc += 1
+            if "unless" in elem.attrib:
+                cc += 1
 
-    # Target-level conditionals
-    for target in root.findall('target'):
-        if 'if' in target.attrib:
+    ant_condition_tags = {
+        "condition",
+        "available",
+        "uptodate",
+        "isset",
+        "not",
+        "and",
+        "or",
+        "equals",
+        "contains",
+        "matches",
+    }
+
+    for elem in root.iter():
+        if local_name(elem.tag) in ant_condition_tags:
             cc += 1
-        if 'unless' in target.attrib:
-            cc += 1
 
-    # Common conditional constructs
-    conditionals = [
-        './/condition',
-        './/available',
-        './/uptodate',
-        './/isset',
-        './/not',
-        './/and',      
-        './/or',
-        './/equals',
-        './/contains',
-        './/matches'
-    ]
-
-    for cond in conditionals:
-        cc += len(root.findall(cond))
-
-    # Fail conditions
-    for fail in root.findall('.//fail'):
-        if 'if' in fail.attrib or 'unless' in fail.attrib:
-            cc += 1
+    for elem in root.iter():
+        if local_name(elem.tag) == "fail":
+            if "if" in elem.attrib or "unless" in elem.attrib:
+                cc += 1
 
     return cc
+
+
 
 # MAVEN Cyclomatic Complexity
 
 def calculate_maven_cc(filepath):
-    tree = ET.parse(filepath)
+    tree = safe_parse_xml(filepath)
+    if tree is None:
+        return 0
+
     root = tree.getroot()
+    cc = 1
 
-    cc = 1  # Base complexity
+    for elem in root.iter():
+        tag = local_name(elem.tag)
 
-    # Detect Maven decision-like constructs
-    cc += len(root.findall('.//profile'))
-    cc += len(root.findall('.//activation'))
-    cc += len(root.findall('.//execution'))
+        if tag == "profile":
+            cc += 1
+        elif tag == "activation":
+            cc += 1
+        elif tag == "execution":
+            cc += 1
 
     return cc
 
 
-# GROOVY / GRADLE Cyclomatic Complexity (AST-based)
+
+# GROOVY / GRADLE Cyclomatic Complexity
 
 def calculate_groovy_cc(filepath):
     try:
@@ -98,25 +159,16 @@ def calculate_groovy_cc(filepath):
 # Detect Build Type
 
 def detect_build_type(filepath):
-    if filepath.endswith(".gradle") or filepath.endswith(".groovy"):
+    filename = os.path.basename(filepath).lower()
+
+    if filename.endswith(".gradle") or filename.endswith(".groovy"):
         return "groovy"
-
-    if filepath.endswith(".xml"):
-        try:
-            tree = ET.parse(filepath)
-            root = tree.getroot()
-
-            # Maven detection (presence of modelVersion)
-            if root.find("modelVersion") is not None:
-                return "maven"
-
-            return "ant"
-
-        except ET.ParseError:
-            print(f"Invalid XML skipped: {filepath}")
-            return None
-
+    if filename == "pom.xml":
+        return "maven"
+    if filename == "build.xml":
+        return "ant"
     return None
+
 
 # Integrate Into Summary
 
@@ -131,7 +183,6 @@ def integrate_cc():
     header = reader[0]
     rows = reader[1:]
 
-    # Add CC column if missing
     if "Cyclomatic_Complexity" not in header:
         header.append("Cyclomatic_Complexity")
 
@@ -159,20 +210,19 @@ def integrate_cc():
             updated_rows.append(row)
             continue
 
-        # Ensure row matches header length
-        row = row[:len(header)-1]
+        row = row[:len(header) - 1]
         row.append(cc)
         updated_rows.append(row)
 
         print(f"{filename} | {build_type.upper()} CC = {cc}")
 
-    # Write updated summary
     with open(SUMMARY_FILE, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(header)
         writer.writerows(updated_rows)
 
     print("\nCyclomatic Complexity successfully integrated into summary_metrics.csv")
+
 
 if __name__ == "__main__":
     integrate_cc()
