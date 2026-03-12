@@ -1,48 +1,66 @@
 import os
-import csv
-import subprocess
-
-
-# Paths
+from collections import defaultdict
+from datetime import timedelta
+from pydriller import Repository
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
-SUMMARY_CSV = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
+REPO_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+
+BUILD_PATHS = {
+    "FilesExamples/build.xml",
+    "FilesExamples/pom.xml",
+    "FilesExamples/build.gradle",
+    "FilesExamples/TestScript.groovy",
+    "FilesExamples/gradle_multi/app/build.gradle",
+    "FilesExamples/gradle_multi/core/build.gradle",
+    "FilesExamples/gradle_multi/lib/build.gradle",
+}
 
 
-# Read existing summary_metrics.csv
-
-summary_data = []
-
-with open(SUMMARY_CSV, newline="", encoding="utf-8") as f:
-    reader = csv.reader(f)
-    headers = next(reader)  # existing headers: File_Name, BLOC
-    summary_data = list(reader)
+def normalize_path(path: str) -> str:
+    return (path or "").replace("\\", "/")
 
 
-# Add Change Frequency for each file
-
-new_summary_data = []
-
-for row in summary_data:
-    filename = row[0]
-    # Run git log to count commits touching the file
-    file_path = os.path.join(BASE_DIR, "..", "FilesExamples", filename.replace("_", "."))
-    cmd = ["git", "log", "--pretty=oneline", "--", file_path]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    commits = result.stdout.strip().split("\n")
-    commits = [c for c in commits if c]
-    change_freq = len(commits)
-    
-    new_summary_data.append(row + [change_freq])
-    print(f"File: {filename} | BLOC = {row[1]} | Change Frequency = {change_freq}")
+def get_commit_date(repo_dir: str, target_commit: str):
+    for commit in Repository(repo_dir).traverse_commits():
+        if commit.hash == target_commit:
+            return commit.committer_date
+    return None
 
 
-# Write updated summary_metrics.csv
+def calculate_change_frequency_until_commit(repo_dir: str, target_commit: str) -> dict:
+    target_date = get_commit_date(repo_dir, target_commit)
+    if target_date is None:
+        return {}
 
-with open(SUMMARY_CSV, "w", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
-    writer.writerow(headers + ["Change_Frequency"])
-    writer.writerows(new_summary_data)
+    since_date = target_date - timedelta(days=30)
+    cf_per_file = defaultdict(int)
 
-print("\nUpdated summary_metrics.csv with Change Frequency!")
+    commits = list(Repository(repo_dir, since=since_date, to=target_date).traverse_commits())
+
+    for commit in commits:
+        touched_in_this_commit = set()
+
+        for mod in commit.modified_files:
+            path = mod.new_path or mod.old_path
+            if not path:
+                continue
+
+            rel = normalize_path(path)
+            if rel not in BUILD_PATHS:
+                continue
+
+            touched_in_this_commit.add(rel)
+
+        for rel in touched_in_this_commit:
+            cf_per_file[rel] += 1
+
+    return dict(cf_per_file)
+
+
+def compute_change_frequency_for_file_at_commit(file_path: str, commit_sha: str, repo_dir: str = REPO_DIR) -> int:
+    if not commit_sha:
+        return 0
+    cf_data = calculate_change_frequency_until_commit(repo_dir, commit_sha)
+    rel = normalize_path(file_path)
+    return cf_data.get(rel, 0)

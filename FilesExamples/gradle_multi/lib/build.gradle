@@ -1,0 +1,28 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.example'
+version = '1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':core')
+}
+
+tasks.register("libTask") {
+    dependsOn("build")
+    doLast {
+        println "Running lib task"
+    }
+}
+
+tasks.register("packageLib") {
+    dependsOn("libTask")
+    doLast {
+        println "Packaging lib"
+    }
+}

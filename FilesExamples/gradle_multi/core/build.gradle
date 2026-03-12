@@ -1,0 +1,22 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.example'
+version = '1.0'
+
+repositories {
+    mavenCentral()
+}
+
+tasks.register("coreTask") {
+    doLast {
+        println "Running core task"
+    }
+}
+
+tasks.register("prepareCoreResources") {
+    doLast {
+        println "Preparing core resources"
+    }
+}

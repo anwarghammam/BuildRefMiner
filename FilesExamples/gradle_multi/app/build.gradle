@@ -1,0 +1,28 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.example'
+version = '1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':lib')
+    implementation project(':core')
+}
+
+tasks.register("appTask") {
+    doLast {
+        println "Running app task"
+    }
+}
+
+tasks.register("assembleApp") {
+    dependsOn("appTask")
+    doLast {
+        println "Assembling app"
+    }
+}

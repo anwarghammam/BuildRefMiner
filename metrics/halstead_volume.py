@@ -21,13 +21,57 @@ def halstead_from_counts(n1, n2, N1, N2):
     return round(volume, 2), round(difficulty, 2), round(effort, 2)
 
 
-# ---------------- ANT ----------------
+
+# XML cleaning helper
+# Keeps only content up to the final </project>
+
+def clean_xml_for_parsing(filepath):
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        closing_tag = "</project>"
+        idx = content.rfind(closing_tag)
+
+        if idx != -1:
+            content = content[: idx + len(closing_tag)]
+
+        return content
+    except Exception as e:
+        print(f"Error cleaning XML file {filepath}: {e}")
+        return None
+
+
+
+# Safe XML parse helper
+
+def safe_parse_xml(filepath):
+    try:
+        cleaned_content = clean_xml_for_parsing(filepath)
+        if cleaned_content is None:
+            return None
+
+        root = ET.fromstring(cleaned_content)
+        return ET.ElementTree(root)
+
+    except ET.ParseError as e:
+        print(f"[XML] Parse error in {filepath}: {e}")
+        return None
+    except Exception as e:
+        print(f"[XML] Unexpected error in {filepath}: {e}")
+        return None
+
+
+# ANT 
 def ant_counts(filepath):
     excluded_tags = {"project", "property", "description"}
     op = Counter()
     opd = Counter()
 
-    tree = ET.parse(filepath)
+    tree = safe_parse_xml(filepath)
+    if tree is None:
+        return 0, 0, 0, 0
+
     root = tree.getroot()
 
     for elem in root.iter():
@@ -48,12 +92,15 @@ def ant_counts(filepath):
     return n1, n2, N1, N2
 
 
-# ---------------- MAVEN ----------------
+# MAVEN 
 def maven_counts(filepath):
     op = Counter()
     opd = Counter()
 
-    tree = ET.parse(filepath)
+    tree = safe_parse_xml(filepath)
+    if tree is None:
+        return 0, 0, 0, 0
+
     root = tree.getroot()
 
     for elem in root.iter():
@@ -71,7 +118,7 @@ def maven_counts(filepath):
     return n1, n2, N1, N2
 
 
-# ---------------- GROOVY/GRADLE ----------------
+#GROOVY/GRADLE 
 def groovy_counts(filepath):
     if not os.path.exists(GROOVY_HALSTEAD_SCRIPT):
         raise FileNotFoundError(f"Missing: {GROOVY_HALSTEAD_SCRIPT}")
@@ -110,9 +157,6 @@ def compute_halstead(filename, filepath):
         print(f"{filename} | Halstead Volume = {volume} (n1={n1}, n2={n2}, N1={N1}, N2={N2})")
         return volume
 
-    except ET.ParseError as e:
-        print(f"[XML] Parse error in {filename}: {e}")
-        return 0.0
     except Exception as e:
         print(f"[ERROR] {filename}: {e}")
         return 0.0
