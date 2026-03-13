@@ -1,63 +1,36 @@
 <project>
   <modelVersion>4.0.0</modelVersion>
 
-  <GroupId>com.Example</GroupId> <!-- ❌ tag name is not lowercase -->
-  <artifactId>My.App</artifactId> <!-- ❌ contains dot -->
+  <groupId>com.example</groupId>
+  <artifactId>my-app</artifactId>
   <version>1.0.0</version>
 
-  <!-- Multi-line comment
-       explaining the properties section
-       should be ignored by BLOC -->
+  <!-- TODO: replace insecure repository URL and fix dependency versions -->
+
+  <repositories>
+    <repository>
+      <id>central</id>
+      <url>http://repo.maven.apache.org/maven2</url>
+    </repository>
+  </repositories>
+
   <properties>
-    <Java_Version>17</Java_Version> <!-- ❌ uses underscore and uppercase -->
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <java.version>17</java.version>
+    <description></description>
   </properties>
 
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
-      <version></version> <!-- ❌ empty value -->
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>*</version>
     </dependency>
   </dependencies>
-
-  <!-- ===== Added duplicate fragments for Clone Density demo ===== -->
-  <profiles>
-    <profile>
-      <id>cloneProfileA</id>
-
-      <!-- identical 5-line clone chunk starts here -->
-      <activation>
-        <activeByDefault>true</activeByDefault>
-      </activation>
-      <properties>
-        <demo.clone>YES</demo.clone>
-      </properties>
-      <!-- identical 5-line clone chunk ends here -->
-
-      <build>
-        <finalName>clone-demo</finalName>
-      </build>
-    </profile>
-
-    <profile>
-      <id>cloneProfileB</id>
-
-      <!-- identical 5-line clone chunk starts here -->
-      <activation>
-        <activeByDefault>true</activeByDefault>
-      </activation>
-      <properties>
-        <demo.clone>YES</demo.clone>
-      </properties>
-      <!-- identical 5-line clone chunk ends here -->
-
-      <build>
-        <finalName>clone-demo</finalName>
-      </build>
-    </profile>
-  </profiles>
-  <!-- ============================================================ -->
 
   <build>
     <plugins>
@@ -65,9 +38,18 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
       </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId> <!-- ❌ duplicate -->
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>sql-maven-plugin</artifactId>
+        <configuration>
+          <onError>continue</onError>
+        </configuration>
       </plugin>
     </plugins>
   </build>

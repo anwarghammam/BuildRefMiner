@@ -1,23 +1,19 @@
 <project name="ExampleProject" default="compile" basedir=".">
-    
-    <!-- Initialize properties -->
-    <property name="src.dir" value="src"/>
+
+    <property name="src.dir" value="/Users/thanujaavr/project/src"/>
     <property name="build.dir" value="build"/>
 
-    <!--
-        This is a multi-line XML comment
-        It should not be counted by BLOC
-    -->
+    <!-- TODO: remove hardcoded path and improve target dependencies -->
+
     <target name="init">
         <mkdir dir="${build.dir}"/>
     </target>
 
-    <target name="compile" depends="init" if="src.dir">
+    <target name="compile" depends="init,clean,run,dupA,dupB">
         <javac srcdir="${src.dir}" destdir="${build.dir}"/>
     </target>
 
-    <!-- Clean target -->
-    <target name="clean" unless="skip.clean">
+    <target name="clean">
         <delete dir="${build.dir}"/>
     </target>
 
@@ -28,7 +24,6 @@
         <echo message="Ready to run."/>
     </target>
 
-    <!-- ===== Added duplicate fragments for Clone Density demo ===== -->
     <target name="dupA">
         <echo message="CLONE_START"/>
         <mkdir dir="${build.dir}/tmp"/>
@@ -44,6 +39,16 @@
         <echo message="LINE_2"/>
         <echo message="CLONE_END"/>
     </target>
-    <!-- ============================================================ -->
+
+    <target name="execTarget">
+        <exec executable="rm" failonerror="false">
+            <arg value="-rf"/>
+            <arg value="/tmp/build-temp"/>
+        </exec>
+    </target>
+
+    <target name="dupA">
+        <echo message="Duplicate target name for smell detection"/>
+    </target>
 
 </project>
