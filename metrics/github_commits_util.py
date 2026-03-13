@@ -5,14 +5,12 @@ import urllib.request
 import urllib.error
 
 
-
-# Build file filter
-
 BUILD_PATHS = {
     "FilesExamples/build.xml",
     "FilesExamples/pom.xml",
     "FilesExamples/build.gradle",
     "FilesExamples/TestScript.groovy",
+    "FilesExamples/gradle_multi/settings.gradle",
     "FilesExamples/gradle_multi/app/build.gradle",
     "FilesExamples/gradle_multi/core/build.gradle",
     "FilesExamples/gradle_multi/lib/build.gradle",
@@ -26,9 +24,6 @@ def normalize_path(path: str) -> str:
 def is_target_build_file(path: str) -> bool:
     return normalize_path(path) in BUILD_PATHS
 
-
-
-# GitHub API helper
 
 def github_get_json(url: str, token: str) -> dict:
     headers = {
@@ -58,15 +53,10 @@ def github_get_json(url: str, token: str) -> dict:
         )
 
 
-# Get commit payload
-
 def get_commit_payload(owner: str, repo: str, commit_sha: str, token: str) -> dict:
     url = f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}"
     return github_get_json(url, token)
 
-
-
-# Get parent commit SHA
 
 def get_parent_commit_sha(owner: str, repo: str, commit_sha: str, token: str) -> str | None:
     payload = get_commit_payload(owner, repo, commit_sha, token)
@@ -75,9 +65,6 @@ def get_parent_commit_sha(owner: str, repo: str, commit_sha: str, token: str) ->
         return None
     return parents[0]["sha"]
 
-
-
-# Get changed build files only
 
 def get_changed_build_files(owner: str, repo: str, commit_sha: str, token: str) -> list[dict]:
     payload = get_commit_payload(owner, repo, commit_sha, token)
@@ -101,9 +88,6 @@ def get_changed_build_files(owner: str, repo: str, commit_sha: str, token: str) 
     return changed
 
 
-
-# Get raw file content from GitHub at specific commit
-
 def get_file_content_at_commit(owner: str, repo: str, commit_sha: str, path: str, token: str) -> str | None:
     path = normalize_path(path)
     url = f"https://raw.githubusercontent.com/{owner}/{repo}/{commit_sha}/{path}"
@@ -118,12 +102,15 @@ def get_file_content_at_commit(owner: str, repo: str, commit_sha: str, path: str
     try:
         with urllib.request.urlopen(req) as response:
             return response.read().decode("utf-8")
-    except Exception:
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        print(f"[WARN] HTTP error fetching {path} at {commit_sha}: {e}")
+        return None
+    except Exception as e:
+        print(f"[WARN] Error fetching {path} at {commit_sha}: {e}")
         return None
 
-
-
-# Write content to temp file
 
 def write_temp_file(content: str | None, suffix: str) -> str | None:
     if content is None:
@@ -134,9 +121,6 @@ def write_temp_file(content: str | None, suffix: str) -> str | None:
     tmp.close()
     return tmp.name
 
-
-
-# Materialize before/after files for one changed file
 
 def materialize_before_after_files(owner: str, repo: str, commit_sha: str, token: str, rel_path: str) -> dict:
     rel_path = normalize_path(rel_path)
@@ -164,7 +148,6 @@ def materialize_before_after_files(owner: str, repo: str, commit_sha: str, token
         "after_temp": after_temp,
     }
 
-# Materialize full project snapshot for modularity
 
 def materialize_project_snapshot(
     owner: str,
