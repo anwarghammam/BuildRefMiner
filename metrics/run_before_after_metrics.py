@@ -31,23 +31,36 @@ SUMMARY_CSV = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
-def detect_build_tool(filename: str) -> str:
-    name = os.path.basename(filename).lower()
+# --------------------------------------------------
+# Generic build-tool detection for any repository
+# --------------------------------------------------
+BUILD_TOOL_RULES = {
+    "Ant": ["build.xml"],
+    "Maven": ["pom.xml"],
+    "Gradle": [".gradle", ".gradle.kts"],
+    "Gradle/Groovy": [".groovy"],
+}
 
-    if name == "build.xml":
-        return "Ant"
-    elif name == "pom.xml":
-        return "Maven"
-    elif name.endswith(".gradle") or name.endswith(".gradle.kts"):
-        return "Gradle"
-    elif name.endswith(".groovy"):
-        return "Gradle/Groovy"
-    else:
-        return "Unknown"
+
+def detect_build_tool(file_path: str) -> str:
+    """
+    Detect the build tool dynamically from a file path or file name.
+    This makes the framework reusable across any repository and
+    supports mixed-build repositories as well.
+    """
+    name = os.path.basename(file_path).lower()
+
+    for tool, patterns in BUILD_TOOL_RULES.items():
+        for pattern in patterns:
+            if name == pattern or name.endswith(pattern):
+                return tool
+
+    return "Unknown"
 
 
 def normalize_build_type_for_sniffer(tool_name: str) -> str:
     tool_name = (tool_name or "").strip().lower()
+
     if tool_name == "maven":
         return "maven"
     elif tool_name == "gradle":
@@ -56,21 +69,27 @@ def normalize_build_type_for_sniffer(tool_name: str) -> str:
         return "gradle"
     elif tool_name == "ant":
         return "ant"
+
     return "unknown"
 
 
-def compute_cc(snapshot_path: str, original_filename: str) -> int:
+def compute_cc(snapshot_path: str, original_file_path: str) -> int:
+    """
+    Select the correct cyclomatic complexity calculator
+    based on the detected build tool.
+    """
     if not snapshot_path or not os.path.exists(snapshot_path):
         return 0
 
-    name = os.path.basename(original_filename).lower()
+    tool = detect_build_tool(original_file_path)
 
-    if name == "build.xml":
+    if tool == "Ant":
         return calculate_ant_cc(snapshot_path)
-    elif name == "pom.xml":
+    elif tool == "Maven":
         return calculate_maven_cc(snapshot_path)
-    elif name.endswith(".gradle") or name.endswith(".groovy") or name.endswith(".gradle.kts"):
+    elif tool in ("Gradle", "Gradle/Groovy"):
         return calculate_groovy_cc(snapshot_path)
+
     return 0
 
 
@@ -169,7 +188,6 @@ def write_summary(rows: list[dict]) -> None:
         "Introduced_Smells",
         "Removed_Smells",
 
-        # Before smell flags
         "Before_INSECURE_URL",
         "Before_HARDCODED_PATH",
         "Before_HARDCODED_CREDENTIAL",
@@ -192,7 +210,6 @@ def write_summary(rows: list[dict]) -> None:
         "Before_LARGE_LOOP",
         "Before_DUPLICATE_LOGIC_BLOCK",
 
-        # After smell flags
         "After_INSECURE_URL",
         "After_HARDCODED_PATH",
         "After_HARDCODED_CREDENTIAL",
@@ -299,14 +316,14 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
             parent_sha = snapshots["parent_sha"]
 
             try:
-                tool = detect_build_tool(basename)
+                tool = detect_build_tool(rel_path)
                 sniffer_build_type = normalize_build_type_for_sniffer(tool)
 
                 bloc_before = compute_bloc(before_temp) if before_temp else 0
                 bloc_after = compute_bloc(after_temp) if after_temp else 0
 
-                cc_before = compute_cc(before_temp, basename) if before_temp else 0
-                cc_after = compute_cc(after_temp, basename) if after_temp else 0
+                cc_before = compute_cc(before_temp, rel_path) if before_temp else 0
+                cc_after = compute_cc(after_temp, rel_path) if after_temp else 0
 
                 halstead_before = compute_halstead_for_snapshot(before_temp, basename) if before_temp else 0.0
                 halstead_after = compute_halstead_for_snapshot(after_temp, basename) if after_temp else 0.0
