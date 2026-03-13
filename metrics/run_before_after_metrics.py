@@ -22,6 +22,7 @@ from github_commits_util import (
     materialize_before_after_files,
     materialize_project_snapshot,
 )
+from sniffer_adapter import SnifferAdapter
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
@@ -30,33 +31,65 @@ SUMMARY_CSV = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
-def detect_build_tool(filename: str) -> str:
-    name = os.path.basename(filename).lower()
-
-    if name == "build.xml":
-        return "Ant"
-    elif name == "pom.xml":
-        return "Maven"
-    elif name.endswith(".gradle") or name.endswith(".gradle.kts"):
-        return "Gradle"
-    elif name.endswith(".groovy"):
-        return "Gradle/Groovy"
-    else:
-        return "Unknown"
+# --------------------------------------------------
+# Generic build-tool detection for any repository
+# --------------------------------------------------
+BUILD_TOOL_RULES = {
+    "Ant": ["build.xml"],
+    "Maven": ["pom.xml"],
+    "Gradle": [".gradle", ".gradle.kts"],
+    "Gradle/Groovy": [".groovy"],
+}
 
 
-def compute_cc(snapshot_path: str, original_filename: str) -> int:
+def detect_build_tool(file_path: str) -> str:
+    """
+    Detect the build tool dynamically from a file path or file name.
+    This makes the framework reusable across any repository and
+    supports mixed-build repositories as well.
+    """
+    name = os.path.basename(file_path).lower()
+
+    for tool, patterns in BUILD_TOOL_RULES.items():
+        for pattern in patterns:
+            if name == pattern or name.endswith(pattern):
+                return tool
+
+    return "Unknown"
+
+
+def normalize_build_type_for_sniffer(tool_name: str) -> str:
+    tool_name = (tool_name or "").strip().lower()
+
+    if tool_name == "maven":
+        return "maven"
+    elif tool_name == "gradle":
+        return "gradle"
+    elif tool_name == "gradle/groovy":
+        return "gradle"
+    elif tool_name == "ant":
+        return "ant"
+
+    return "unknown"
+
+
+def compute_cc(snapshot_path: str, original_file_path: str) -> int:
+    """
+    Select the correct cyclomatic complexity calculator
+    based on the detected build tool.
+    """
     if not snapshot_path or not os.path.exists(snapshot_path):
         return 0
 
-    name = os.path.basename(original_filename).lower()
+    tool = detect_build_tool(original_file_path)
 
-    if name == "build.xml":
+    if tool == "Ant":
         return calculate_ant_cc(snapshot_path)
-    elif name == "pom.xml":
+    elif tool == "Maven":
         return calculate_maven_cc(snapshot_path)
-    elif name.endswith(".gradle") or name.endswith(".groovy") or name.endswith(".gradle.kts"):
+    elif tool in ("Gradle", "Gradle/Groovy"):
         return calculate_groovy_cc(snapshot_path)
+
     return 0
 
 
@@ -76,6 +109,45 @@ def compute_build_cohesion_for_snapshot(snapshot_path: str) -> float:
     if not snapshot_path or not os.path.exists(snapshot_path):
         return 0.0
     return compute_build_cohesion_value(snapshot_path)
+
+
+def flatten_smell_result(prefix: str, smell_result: dict) -> dict:
+    row = {
+        f"{prefix}_Smell_Count": smell_result.get("smell_count", 0),
+        f"{prefix}_Smell_Density": smell_result.get("smell_density", 0.0),
+        f"{prefix}_Smell_Summary": smell_result.get("smell_summary", "")
+    }
+
+    smell_ids = {s["smell_id"] for s in smell_result.get("smells", [])}
+
+    tracked_smells = [
+        "INSECURE_URL",
+        "HARDCODED_PATH",
+        "HARDCODED_CREDENTIAL",
+        "DUPLICATE_DECLARATION",
+        "MISSING_DEPENDENCY_VERSION",
+        "WILDCARD_VERSION",
+        "EMPTY_TAG",
+        "LACK_ERROR_HANDLING",
+        "SUSPICIOUS_COMMENT",
+        "COMPLEX_BUILD_LOGIC",
+        "EXEC_USAGE",
+        "DUPLICATE_TARGET",
+        "EXCESSIVE_TARGET_DEPENDENCIES",
+        "LONG_LINE",
+        "BAD_CLASS_NAME",
+        "BAD_METHOD_NAME",
+        "LONG_VARIABLE_NAME",
+        "BAD_FIELD_NAME",
+        "TOO_MANY_PARAMETERS",
+        "LARGE_LOOP",
+        "DUPLICATE_LOGIC_BLOCK",
+    ]
+
+    for smell in tracked_smells:
+        row[f"{prefix}_{smell}"] = 1 if smell in smell_ids else 0
+
+    return row
 
 
 def write_summary(rows: list[dict]) -> None:
@@ -105,6 +177,60 @@ def write_summary(rows: list[dict]) -> None:
         "Churn_After",
         "Change_Frequency_Before",
         "Change_Frequency_After",
+        "Before_Smell_Count",
+        "After_Smell_Count",
+        "Before_Smell_Density",
+        "After_Smell_Density",
+        "Before_Smell_Summary",
+        "After_Smell_Summary",
+        "Smell_Count_Delta",
+        "Smell_Density_Delta",
+        "Introduced_Smells",
+        "Removed_Smells",
+
+        "Before_INSECURE_URL",
+        "Before_HARDCODED_PATH",
+        "Before_HARDCODED_CREDENTIAL",
+        "Before_DUPLICATE_DECLARATION",
+        "Before_MISSING_DEPENDENCY_VERSION",
+        "Before_WILDCARD_VERSION",
+        "Before_EMPTY_TAG",
+        "Before_LACK_ERROR_HANDLING",
+        "Before_SUSPICIOUS_COMMENT",
+        "Before_COMPLEX_BUILD_LOGIC",
+        "Before_EXEC_USAGE",
+        "Before_DUPLICATE_TARGET",
+        "Before_EXCESSIVE_TARGET_DEPENDENCIES",
+        "Before_LONG_LINE",
+        "Before_BAD_CLASS_NAME",
+        "Before_BAD_METHOD_NAME",
+        "Before_LONG_VARIABLE_NAME",
+        "Before_BAD_FIELD_NAME",
+        "Before_TOO_MANY_PARAMETERS",
+        "Before_LARGE_LOOP",
+        "Before_DUPLICATE_LOGIC_BLOCK",
+
+        "After_INSECURE_URL",
+        "After_HARDCODED_PATH",
+        "After_HARDCODED_CREDENTIAL",
+        "After_DUPLICATE_DECLARATION",
+        "After_MISSING_DEPENDENCY_VERSION",
+        "After_WILDCARD_VERSION",
+        "After_EMPTY_TAG",
+        "After_LACK_ERROR_HANDLING",
+        "After_SUSPICIOUS_COMMENT",
+        "After_COMPLEX_BUILD_LOGIC",
+        "After_EXEC_USAGE",
+        "After_DUPLICATE_TARGET",
+        "After_EXCESSIVE_TARGET_DEPENDENCIES",
+        "After_LONG_LINE",
+        "After_BAD_CLASS_NAME",
+        "After_BAD_METHOD_NAME",
+        "After_LONG_VARIABLE_NAME",
+        "After_BAD_FIELD_NAME",
+        "After_TOO_MANY_PARAMETERS",
+        "After_LARGE_LOOP",
+        "After_DUPLICATE_LOGIC_BLOCK",
     ]
 
     file_exists = os.path.exists(SUMMARY_CSV)
@@ -122,7 +248,6 @@ def write_summary(rows: list[dict]) -> None:
         writer.writerows(rows)
 
     print(f"\nResults appended to: {SUMMARY_CSV}")
-
 
 
 def cleanup_temp_files(*paths):
@@ -145,6 +270,8 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
     if not changed_files:
         print("No target build files changed in this commit.")
         return
+
+    sniffer = SnifferAdapter()
 
     parent_sha = None
     snapshots_probe = materialize_before_after_files(
@@ -189,11 +316,14 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
             parent_sha = snapshots["parent_sha"]
 
             try:
+                tool = detect_build_tool(rel_path)
+                sniffer_build_type = normalize_build_type_for_sniffer(tool)
+
                 bloc_before = compute_bloc(before_temp) if before_temp else 0
                 bloc_after = compute_bloc(after_temp) if after_temp else 0
 
-                cc_before = compute_cc(before_temp, basename) if before_temp else 0
-                cc_after = compute_cc(after_temp, basename) if after_temp else 0
+                cc_before = compute_cc(before_temp, rel_path) if before_temp else 0
+                cc_after = compute_cc(after_temp, rel_path) if after_temp else 0
 
                 halstead_before = compute_halstead_for_snapshot(before_temp, basename) if before_temp else 0.0
                 halstead_after = compute_halstead_for_snapshot(after_temp, basename) if after_temp else 0.0
@@ -207,15 +337,18 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                 churn_before = compute_churn_for_file_at_commit(rel_path, parent_sha) if parent_sha else 0
                 churn_after = churn_before + additions + deletions
 
-
                 cf_before = compute_change_frequency_for_file_at_commit(rel_path, parent_sha) if parent_sha else 0
                 cf_after = cf_before + 1
+
+                before_smells = sniffer.detect_smells(before_temp, sniffer_build_type) if before_temp else sniffer.empty_result()
+                after_smells = sniffer.detect_smells(after_temp, sniffer_build_type) if after_temp else sniffer.empty_result()
+
                 row = {
                     "Commit_SHA": commit_sha,
                     "Parent_SHA": parent_sha or "",
                     "File_Path": rel_path,
                     "File_Name": basename,
-                    "Tool": detect_build_tool(basename),
+                    "Tool": tool,
                     "Status": status,
                     "Additions": additions,
                     "Deletions": deletions,
@@ -236,6 +369,12 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     "Churn_After": churn_after,
                     "Change_Frequency_Before": cf_before,
                     "Change_Frequency_After": cf_after,
+                    **flatten_smell_result("Before", before_smells),
+                    **flatten_smell_result("After", after_smells),
+                    "Smell_Count_Delta": after_smells["smell_count"] - before_smells["smell_count"],
+                    "Smell_Density_Delta": round(after_smells["smell_density"] - before_smells["smell_density"], 4),
+                    "Introduced_Smells": 1 if after_smells["smell_count"] > before_smells["smell_count"] else 0,
+                    "Removed_Smells": 1 if after_smells["smell_count"] < before_smells["smell_count"] else 0,
                 }
 
                 summary_rows.append(row)
@@ -249,14 +388,15 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     f"Cohesion {cohesion_before}->{cohesion_after} | "
                     f"Modularity {modularity_before}->{modularity_after} | "
                     f"Churn {churn_before}->{churn_after} | "
-                    f"CF {cf_before}->{cf_after}"
+                    f"CF {cf_before}->{cf_after} | "
+                    f"Smells {before_smells['smell_count']}->{after_smells['smell_count']}"
                 )
 
             finally:
                 cleanup_temp_files(before_temp, after_temp)
 
         write_summary(summary_rows)
-        print("\nBefore/after analysis completed for all metrics.")
+        print("\nBefore/after analysis completed for all metrics and smells.")
 
     finally:
         cleanup_temp_files(before_project_dir, after_project_dir)
