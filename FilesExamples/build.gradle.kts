@@ -29,3 +29,29 @@ tasks.register("describeBuild") {
         }
     }
 }
+
+tasks.register("clonePipelineAlpha") {
+    doLast {
+        val stage = "qa"
+        println("Preparing artifacts")
+        println("Validating manifest")
+        if (stage == "qa") {
+            println("Promoting candidate")
+        }
+        println("Publishing package")
+        println("Pipeline complete")
+    }
+}
+
+tasks.register("clonePipelineBeta") {
+    doLast {
+        val stage = "qa"
+        println("Preparing artifacts")
+        println("Validating manifest")
+        if (stage == "qa") {
+            println("Promoting candidate")
+        }
+        println("Publishing package")
+        println("Pipeline complete")
+    }
+}

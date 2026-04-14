@@ -54,6 +54,40 @@ class BuildScriptSimulation {
     }
 }
 
+task clonePipelineAlpha {
+    doLast {
+        def stage = "qa"
+        def artifactName = "release-bundle"
+        def outputDir = "build/releases"
+        println "Preparing artifacts"
+        println "Validating manifest"
+        println "Copying ${artifactName} into ${outputDir}"
+        println "Recording checksum for ${artifactName}"
+        if (stage == "qa") {
+            println "Promoting candidate"
+        }
+        println "Publishing package"
+        println "Pipeline complete"
+    }
+}
+
+task clonePipelineBeta {
+    doLast {
+        def stage = "qa"
+        def artifactName = "release-bundle"
+        def outputDir = "build/releases"
+        println "Preparing artifacts"
+        println "Validating manifest"
+        println "Copying ${artifactName} into ${outputDir}"
+        println "Recording checksum for ${artifactName}"
+        if (stage == "qa") {
+            println "Promoting candidate"
+        }
+        println "Publishing package"
+        println "Pipeline complete"
+    }
+}
+
 // Dummy CF test commit: CF Test commit 1 for build.gradle
 // Dummy CF test commit: CF Test commit 2 for build.gradle
 // Dummy CF test commit: CF Test commit 3 for build.gradle

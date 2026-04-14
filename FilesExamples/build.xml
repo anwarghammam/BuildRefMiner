@@ -47,6 +47,22 @@
         </exec>
     </target>
 
+    <target name="clonePipelineAlpha">
+        <echo message="Preparing artifacts"/>
+        <echo message="Validating manifest"/>
+        <mkdir dir="${build.dir}/release"/>
+        <copy file="${build.dir}/Main.class" tofile="${build.dir}/release/Main.class"/>
+        <echo message="Publishing package"/>
+    </target>
+
+    <target name="clonePipelineBeta">
+        <echo message="Preparing artifacts"/>
+        <echo message="Validating manifest"/>
+        <mkdir dir="${build.dir}/release"/>
+        <copy file="${build.dir}/Main.class" tofile="${build.dir}/release/Main.class"/>
+        <echo message="Publishing package"/>
+    </target>
+
     <target name="dupA">
         <echo message="Duplicate target name for smell detection"/>
     </target>

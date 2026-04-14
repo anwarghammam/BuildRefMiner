@@ -1,5 +1,5 @@
-File_Name,BLOC,Cyclomatic_Complexity,Style_Conformance_Score,Complexity_Model,Halstead_Volume
-build.gradle,42,7,71.43,Cyclomatic_Complexity_CodeNarc,454.0
-build.xml,42,3,90.48,Build_Logic_Complexity_Ant,250.36
-pom.xml,46,1,100,Build_Logic_Complexity_Maven,338.61
-build.gradle.kts,25,8,100,Cyclomatic_Complexity_detekt,0.0
+File_Name,BLOC,Cyclomatic_Complexity,Style_Conformance_Score,Complexity_Model,Halstead_Volume,Clone_Density
+build.gradle,42,7,71.43,Cyclomatic_Complexity_CodeNarc,454.0,0.676
+build.xml,42,3,90.48,Build_Logic_Complexity_Ant,250.36,0.607
+pom.xml,46,1,100,Build_Logic_Complexity_Maven,338.61,0.556
+build.gradle.kts,25,8,100,Cyclomatic_Complexity_detekt,0.0,0.49

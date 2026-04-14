@@ -43,7 +43,7 @@ SCS = max(0, 100 - ((violations / BLOC) * 100))
 **Where:**
 - `P1`, `P2`, `P3` = CodeNarc priority counts
 - `violations` = total detekt or XML style findings
-- `BLOC` = Build Lines of Code from `metrics/bloc_analyser.py`
+- `BLOC` = Build Lines of Code from [`metrics/BLOC.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/BLOC.py)
 
 ### Style Tooling
 
@@ -112,6 +112,40 @@ In other words:
 - more `execution` elements mean more explicit workflow steps
 
 This keeps the XML metric simple and explainable while still reflecting branching, conditional activation, and executable build orchestration in `pom.xml`.
+
+### Clone Density
+
+This repo computes clone density with **PMD CPD** in [`metrics/clone_density.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/clone_density.py).
+
+The score is:
+
+```text
+Clone_Density = duplicated_build_logic_lines / BLOC
+```
+
+**Where:**
+- `duplicated_build_logic_lines` = the union of duplicated line ranges reported by PMD CPD for the file
+- `BLOC` = Build Lines of Code from [`metrics/BLOC.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/BLOC.py)
+
+The implementation currently uses:
+- PMD CPD with `--minimum-tokens 20`
+- Groovy mode for `.gradle`
+- Kotlin mode for `.gradle.kts`
+- XML mode for `pom.xml` and `build.xml`
+
+For Gradle files, PMD CPD is run on temporary files with standard parser-friendly extensions:
+- `.gradle` is analyzed as temporary `.groovy`
+- `.gradle.kts` is analyzed as temporary `.kt`
+
+For Groovy Gradle files, the script also normalizes some interpolation forms before running PMD CPD so tokenization stays stable while preserving duplicated structure.
+
+In practice, the pipeline is:
+1. detect the build file type
+2. choose the PMD CPD language (`groovy`, `kotlin`, or `xml`)
+3. run PMD CPD and collect duplicated line ranges
+4. merge overlapping duplicated ranges for the target file
+5. divide duplicated lines by BLOC
+6. write the result to the `Clone_Density` column in [`results/summary_metrics.csv`](/Users/aghammam/Desktop/BuildRefMiner/results/summary_metrics.csv)
 
 ---
 ## 2- Dependency Quality
