@@ -1,6 +1,7 @@
 import org.codehaus.groovy.control.*
 import org.codehaus.groovy.ast.*
 import org.codehaus.groovy.ast.expr.*
+import org.codehaus.groovy.ast.stmt.*
 import org.codehaus.groovy.ast.ClassCodeVisitorSupport
 
 if (args.length == 0) {
@@ -63,6 +64,129 @@ try {
             // operator = declaration operation (usually '=')
             recordOperator(expr.operation?.text)
             super.visitDeclarationExpression(expr)
+        }
+
+        @Override
+        void visitPrefixExpression(PrefixExpression expr) {
+            // operator = prefix operator token (!, ++, --, etc.)
+            recordOperator(expr.operation?.text)
+            super.visitPrefixExpression(expr)
+        }
+
+        @Override
+        void visitPostfixExpression(PostfixExpression expr) {
+            // operator = postfix operator token (++ , --)
+            recordOperator(expr.operation?.text)
+            super.visitPostfixExpression(expr)
+        }
+
+        @Override
+        void visitUnaryMinusExpression(UnaryMinusExpression expr) {
+            recordOperator("-")
+            super.visitUnaryMinusExpression(expr)
+        }
+
+        @Override
+        void visitUnaryPlusExpression(UnaryPlusExpression expr) {
+            recordOperator("+")
+            super.visitUnaryPlusExpression(expr)
+        }
+
+        @Override
+        void visitBitwiseNegationExpression(BitwiseNegationExpression expr) {
+            recordOperator("~")
+            super.visitBitwiseNegationExpression(expr)
+        }
+
+        @Override
+        void visitNotExpression(NotExpression expr) {
+            recordOperator("!")
+            super.visitNotExpression(expr)
+        }
+
+        @Override
+        void visitTernaryExpression(TernaryExpression expr) {
+            recordOperator("?:")
+            super.visitTernaryExpression(expr)
+        }
+
+        @Override
+        void visitShortTernaryExpression(ElvisOperatorExpression expr) {
+            recordOperator("?:")
+            super.visitShortTernaryExpression(expr)
+        }
+
+        @Override
+        void visitIfElse(IfStatement stmt) {
+            recordOperator("if")
+            if (!(stmt.elseBlock instanceof EmptyStatement)) {
+                recordOperator("else")
+            }
+            super.visitIfElse(stmt)
+        }
+
+        @Override
+        void visitForLoop(ForStatement stmt) {
+            recordOperator("for")
+            super.visitForLoop(stmt)
+        }
+
+        @Override
+        void visitWhileLoop(WhileStatement stmt) {
+            recordOperator("while")
+            super.visitWhileLoop(stmt)
+        }
+
+        @Override
+        void visitDoWhileLoop(DoWhileStatement stmt) {
+            recordOperator("doWhile")
+            super.visitDoWhileLoop(stmt)
+        }
+
+        @Override
+        void visitSwitch(SwitchStatement stmt) {
+            recordOperator("switch")
+            super.visitSwitch(stmt)
+        }
+
+        @Override
+        void visitCaseStatement(CaseStatement stmt) {
+            recordOperator("case")
+            super.visitCaseStatement(stmt)
+        }
+
+        @Override
+        void visitCatchStatement(CatchStatement stmt) {
+            recordOperator("catch")
+            super.visitCatchStatement(stmt)
+        }
+
+        @Override
+        void visitClosureExpression(ClosureExpression expr) {
+            expr.parameters?.each { param ->
+                if (param?.name != null) {
+                    recordOperand(param.name)
+                }
+            }
+            super.visitClosureExpression(expr)
+        }
+
+        @Override
+        void visitPropertyExpression(PropertyExpression expr) {
+            // operand = property/member names in chains like project.version
+            if (expr.propertyAsString != null) {
+                recordOperand(expr.propertyAsString)
+            }
+            super.visitPropertyExpression(expr)
+        }
+
+        @Override
+        void visitAttributeExpression(AttributeExpression expr) {
+            // operand = attribute/member names in expressions like object.@field
+            if (expr.propertyAsString != null) {
+                recordOperand(expr.propertyAsString)
+            }
+            super.visitAttributeExpression(expr)
         }
 
         @Override

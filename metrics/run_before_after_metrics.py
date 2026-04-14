@@ -5,7 +5,7 @@ import shutil
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from bloc_analyser import compute_bloc
+from metrics.BLOC import compute_bloc
 from cyclomatic_complexity import (
     calculate_ant_cc,
     calculate_maven_cc,

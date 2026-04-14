@@ -1,7 +1,0 @@
-Module,File,Build System,Task Count,Build Cohesion,Outgoing Edges,Outgoing Edge Count,Average Cohesion,Cross-Module Edge Count,CP_External,Build Modularity (Heuristic)
-build.xml,build.xml,Ant,6,0.1667,,0,0.4445,3,0.1,0.6039
-pom.xml,pom.xml,Maven,0,0.0,,0,0.4445,3,0.1,0.6039
-build.gradle,build.gradle,Gradle,0,0.0,,0,0.4445,3,0.1,0.6039
-core,gradle_multi/core/build.gradle,Gradle,2,1.0,,0,0.4445,3,0.1,0.6039
-app,gradle_multi/app/build.gradle,Gradle,2,0.5,"core, lib",2,0.4445,3,0.1,0.6039
-lib,gradle_multi/lib/build.gradle,Gradle,2,1.0,core,1,0.4445,3,0.1,0.6039

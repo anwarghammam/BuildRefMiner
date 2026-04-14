@@ -1,8 +1,0 @@
-Module,File,Build System,Task Count,Build Cohesion
-build.gradle,build.gradle,Gradle,0,0.0
-build.xml,build.xml,Ant,6,0.257
-pom.xml,pom.xml,Maven,0,0.0
-gardle_multi,gardle_multi/settings.gradle,Gradle,0,0.0
-gardle_multi/core,gardle_multi/core/build.gradle,Gradle,2,1.0
-gardle_multi/app,gardle_multi/app/build.gradle,Gradle,2,0.5
-gardle_multi/lib,gardle_multi/lib/build.gradle,Gradle,2,1.0

@@ -14,7 +14,7 @@ Complexity = w₁ * (1 / CC)
 ```
 
 **Where:**
-- `CC` = Cyclomatic Complexity  
+- `CC` = Cyclomatic Complexity for Gradle Groovy DSL and Kotlin DSL, or build-logic complexity for XML build files  
 - `HC` = Halsted Complexity
 - `SCS` = % of lines following style. 
 - `CR` = Comment Ratio   (Comment Lines / Total Lines))  
@@ -23,14 +23,91 @@ Complexity = w₁ * (1 / CC)
 - `DCR` = Dependency Conflict Ratio  
 ---
 
-### SCS (Style conformance)
+### SCS (Style Conformance Score)
+
+This repo computes style conformance as a normalized score from `0` to `100`.
+
+For CodeNarc-based Gradle style checks:
 
 ```
-SCS = 1 - (V / LOC) 
+weighted_violations = 5 * P1 + 3 * P2 + 1 * P3
+SCS = max(0, 100 - ((weighted_violations / BLOC) * 100))
 ```
 
-- `V` = (number of violations)  
-- `LOC` = Lines of Code
+For detekt-based Kotlin DSL checks and the custom XML checks for Maven and Ant:
+
+```
+SCS = max(0, 100 - ((violations / BLOC) * 100))
+```
+
+**Where:**
+- `P1`, `P2`, `P3` = CodeNarc priority counts
+- `violations` = total detekt or XML style findings
+- `BLOC` = Build Lines of Code from `metrics/bloc_analyser.py`
+
+### Style Tooling
+
+- Gradle Groovy DSL style rules: [`config/codenarc_style.groovy`](/Users/aghammam/Desktop/BuildRefMiner/config/codenarc_style.groovy)
+- Kotlin DSL style rules: [`config/detekt_style.yml`](/Users/aghammam/Desktop/BuildRefMiner/config/detekt_style.yml)
+- Style scoring pipeline: [`metrics/style_conformance.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/style_conformance.py)
+
+### Run Style Scoring
+
+From the repo root:
+
+```bash
+export CODENARC_BINARY="$PWD/tools/codenarc/codenarc"
+export DETEKT_BINARY="$PWD/tools/detekt/detekt"
+python3 metrics/style_conformance.py
+```
+
+This writes `Style_Conformance_Score` into [`processed_builds/summary_metrics.csv`](/Users/aghammam/Desktop/BuildRefMiner/processed_builds/summary_metrics.csv).
+
+### Complexity Tooling Notes
+
+- `build.gradle` uses CodeNarc for cyclomatic complexity.
+- `build.gradle.kts` uses detekt for cyclomatic complexity.
+- `build.xml` and `pom.xml` do not have a standard off-the-shelf cyclomatic-complexity tool in this repo.
+- For `build.xml` and `pom.xml`, [`metrics/cyclomatic_complexity.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/cyclomatic_complexity.py) computes a custom structural **Build Logic Complexity** heuristic instead.
+- The summary CSV includes a `Complexity_Model` column so the metric source is explicit per file.
+
+For Ant (`build.xml`), the current build-logic complexity heuristic is:
+
+```text
+BLC_ant = 1
+        + count(condition/operator tags)
+        + count(if)
+        + count(unless)
+        + count(extra dependency edges from depends)
+```
+
+Where:
+- `condition/operator tags` include `condition`, `available`, `uptodate`, `isset`, `equals`, `contains`, `matches`, `and`, `or`, and `not`
+- each `if` and each `unless` attribute contributes `1`
+- `extra dependency edges from depends` is `max(0, number_of_dependencies - 1)` per target
+
+This is documented as **Build Logic Complexity** rather than true cyclomatic complexity for XML build files.
+
+For Maven (`pom.xml`), the current build-logic complexity heuristic is:
+
+```text
+BLC_maven = 1
+          + count(profile)
+          + count(activation)
+          + count(execution)
+```
+
+These components were chosen because they capture the main structural sources of build reasoning in Maven:
+- `profile`: represents an alternative build path or configuration branch
+- `activation`: represents the condition that enables a profile
+- `execution`: represents a concrete plugin-driven build step in the lifecycle
+
+In other words:
+- more `profile` elements mean more alternate configurations to reason about
+- more `activation` elements mean more conditional behavior
+- more `execution` elements mean more explicit workflow steps
+
+This keeps the XML metric simple and explainable while still reflecting branching, conditional activation, and executable build orchestration in `pom.xml`.
 
 ---
 ## 2- Dependency Quality
@@ -492,21 +569,25 @@ A lower BRT is desirable and indicates a more efficient build configuration.
 
 This document describes how **operators** and **operands** are identified for computing Halstead Complexity in three build systems: **Gradle**, **Maven**, and **Ant**.
 
+The authoritative implementation lives in [`metrics/halstead_volume.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/halstead_volume.py), with [`metrics/halstead_groovy_ast.groovy`](/Users/aghammam/Desktop/BuildRefMiner/metrics/halstead_groovy_ast.groovy) used as the Gradle/Groovy AST helper.
+
 ---
 
 ## 🔧 Gradle (Groovy DSL)
 
 - **Operators**: 
-  - All Groovy method calls (e.g., `task`, `doLast`, `println`)
-  - Binary expressions (`=`, `==`, etc.)
-  - Control structures like `if`, `else`, and method declarations
+  - Groovy method calls, including DSL entry points and nested DSL blocks such as `plugins {}`, `repositories {}`, `dependencies {}`, `task`, `register`, `named`, `implementation`, and `mavenCentral`
+  - Assignment, binary, unary, and ternary/elvis operators such as `=`, `==`, `!`, and `?:`
+  - Control-flow constructs such as `if`, `else`, `for`, `while`, `switch`, `case`, and `catch`
 
 - **Operands**:
-  - Constants or string values passed to method calls (e.g., `"Hello, Gradle!"`)
-  - Variable and property names (e.g., `release`, `project.release`)
-  - Any identifiers involved in assignments or expressions
+  - String, numeric, and boolean literals
+  - Variable identifiers referenced in expressions
+  - Property/member names referenced in expressions such as `project.version`, `rootProject.name`, and `sourceSets.main`
+  - Closure parameter names used in task and closure bodies
+  - Dependency coordinates, file paths, and URLs when they appear as string literals
 
-> **Note**: The Groovy AST is traversed to extract all relevant operator and operand nodes.
+> **Note**: DSL blocks are counted through their underlying method calls, so the closure body itself is not counted as a separate operator. The Groovy AST is traversed to extract these nodes, making Gradle Halstead Volume an AST-based approximation of build-script logic rather than a plain-text token count.
 
 ---
 
@@ -516,24 +597,26 @@ This document describes how **operators** and **operands** are identified for co
   - All XML tags, such as `<project>`, `<build>`, `<plugin>`, `<execution>`, etc.
 
 - **Operands**:
-  - All **child tags** of the operator tags (excluding empty or purely structural tags)
-  - Text or values enclosed within tags (e.g., `1.0-SNAPSHOT` inside `<version>`)
+  - All child XML tags of the operator tags
+  - Example: in `<plugin><artifactId>maven-compiler-plugin</artifactId></plugin>`, `<plugin>` is an operator and `<artifactId>` is an operand
 
-> **Example**: In `<plugin><artifactId>maven-compiler-plugin</artifactId></plugin>`, `<plugin>` is an operator and `<artifactId>` is an operand.
+> **Note**: This follows the McIntosh et al. definition used in the repo: every Maven XML tag is counted as an operator, and child XML tags are counted as operands.
 
 ---
 
 ## 🛠️ Ant (XML-based)
 
 - **Operators**:
-  - Any `<target>` or task tag (e.g., `<mkdir>`, `<javac>`, `<delete>`, `<echo>`)
-  - Control attribute-based logic such as `depends`, `if`, `unless`
+  - Ant target and task tags, such as `<target>`, `<property>`, `<mkdir>`, `<javac>`, `<delete>`, and `<echo>`
+  - The root `<project>` tag and `<description>` are excluded from the repo's implementation
 
 - **Operands**:
-  - Parameter values passed to tasks, excluding `"name"` in `<target name="...">`
-  - Attributes of task elements (e.g., `dir`, `srcdir`, `destdir`)
+  - Parameter names passed to target or task tags
+  - The `name` parameter of `<target>` is excluded
 
-> **Example**: In `<javac srcdir="${src.dir}" destdir="${build.dir}"/>`, `javac` is an operator and `src.dir`, `build.dir` are operands.
+> **Example**: In `<javac srcdir="${src.dir}" destdir="${build.dir}"/>`, `javac` is an operator and `srcdir`, `destdir` are operands.
+
+> **Note**: This follows the McIntosh et al. definition adapted in the repo: ANT targets and tasks are operators, while their parameters are operands, excluding the target `name` parameter.
 
 ---
 
@@ -553,5 +636,3 @@ Volume     = Length * log2(Vocabulary)
 ```
 
 ---
-
-

@@ -63,14 +63,14 @@ def safe_parse_xml(filepath):
 
 
 # ANT 
-def ant_counts(filepath):
-    excluded_tags = {"project", "property", "description"}
+def ant_operator_operand_counters(filepath):
+    excluded_tags = {"project", "description"}
     op = Counter()
     opd = Counter()
 
     tree = safe_parse_xml(filepath)
     if tree is None:
-        return 0, 0, 0, 0
+        return op, opd
 
     root = tree.getroot()
 
@@ -81,9 +81,15 @@ def ant_counts(filepath):
 
         op[tag] += 1
 
-        for attr_key, attr_val in elem.attrib.items():
+        for attr_key, _attr_val in elem.attrib.items():
             if not (tag == "target" and attr_key == "name"):
-                opd[str(attr_val)] += 1
+                opd[attr_key] += 1
+
+    return op, opd
+
+
+def ant_counts(filepath):
+    op, opd = ant_operator_operand_counters(filepath)
 
     n1 = len(op)
     n2 = len(opd)
@@ -93,13 +99,13 @@ def ant_counts(filepath):
 
 
 # MAVEN 
-def maven_counts(filepath):
+def maven_operator_operand_counters(filepath):
     op = Counter()
     opd = Counter()
 
     tree = safe_parse_xml(filepath)
     if tree is None:
-        return 0, 0, 0, 0
+        return op, opd
 
     root = tree.getroot()
 
@@ -110,6 +116,12 @@ def maven_counts(filepath):
         for child in list(elem):
             child_tag = child.tag.split("}")[-1]
             opd[child_tag] += 1
+
+    return op, opd
+
+
+def maven_counts(filepath):
+    op, opd = maven_operator_operand_counters(filepath)
 
     n1 = len(op)
     n2 = len(opd)

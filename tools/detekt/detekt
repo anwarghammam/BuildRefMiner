@@ -1,0 +1,11 @@
+#!/bin/zsh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+JARS=("$DIR"/lib/detekt-cli*.jar(N))
+
+if (( ${#JARS[@]} == 0 )); then
+  echo "detekt CLI jar not found in $DIR/lib" >&2
+  echo "See $DIR/README.md for setup instructions." >&2
+  exit 1
+fi
+
+exec java -jar "$JARS[1]" "$@"

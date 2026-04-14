@@ -5,7 +5,8 @@
   <artifactId>my-app</artifactId>
   <version>1.0.0</version>
 
-  <!-- TODO: replace insecure repository URL and fix dependency versions -->
+  <!-- TODO: replace insecure repository URL and 
+  fix dependency versions -->
 
   <repositories>
     <repository>
