@@ -3,6 +3,8 @@ import sys
 import csv
 import shutil
 import argparse
+import types
+import importlib.util
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
@@ -27,7 +29,6 @@ from github_commits_util import (
     materialize_before_after_files,
     materialize_project_snapshot,
 )
-from sniffer_adapter import SnifferAdapter
 from style_conformance import (
     calculate_gradle_kts_style_violations,
     calculate_gradle_style_violations,
@@ -52,6 +53,30 @@ BUILD_TOOL_RULES = {
     "Gradle/Groovy": [".groovy"],
 }
 
+TRACKED_SMELLS = [
+    "COMPLEXITY",
+    "DUPLICATES",
+    "EMPTY_INCOMPLETE_TAGS",
+    "INCONSISTENT_DEPENDENCY_MANAGEMENT",
+    "LACK_OF_ERROR_HANDLING",
+    "MISSING_DEPENDENCY_VERSION",
+    "SUSPICIOUS_COMMENTS",
+    "DEPRECATED_DEPENDENCIES",
+    "OUTDATED_DEPENDENCIES",
+]
+
+TRACKED_SECURITY_SMELLS = [
+    "HARDCODED_CREDENTIALS",
+    "INSECURE_URLS",
+    "WILDCARD_USAGE",
+    "HARDCODED_PATHS_AND_URLS",
+]
+
+_SMELL_EXTRACTOR_IMPORT_FAILED = False
+_EXTRACT_MAINTAINABILITY_SMELLS = None
+_SECURITY_SMELL_EXTRACTOR_IMPORT_FAILED = False
+_EXTRACT_SECURITY_SMELLS = None
+
 
 def detect_build_tool(file_path: str) -> str:
     """
@@ -69,19 +94,149 @@ def detect_build_tool(file_path: str) -> str:
     return "Unknown"
 
 
-def normalize_build_type_for_sniffer(tool_name: str) -> str:
+def normalize_build_type_for_smells(tool_name: str) -> str:
     tool_name = (tool_name or "").strip().lower()
 
-    if tool_name == "maven":
+    if tool_name == "ant":
+        return "ant"
+    elif tool_name == "maven":
         return "maven"
     elif tool_name == "gradle":
         return "gradle"
     elif tool_name == "gradle/groovy":
         return "gradle"
-    elif tool_name == "ant":
-        return "ant"
+    elif tool_name == "cmake":
+        return "cmake"
+    elif tool_name == "make":
+        return "make"
 
     return "unknown"
+
+
+def empty_smell_result() -> dict:
+    return {
+        "file_path": "",
+        "build_type": "",
+        "smells": [],
+        "smell_count": 0,
+        "smell_density": 0.0,
+        "smell_summary": "",
+    }
+
+
+def format_smell_result(file_path: str, build_type: str, smells: list[dict]) -> dict:
+    loc = compute_bloc(file_path) if file_path and os.path.exists(file_path) else 0
+    smell_count = len(smells)
+    smell_summary = ";".join(sorted({s["smell_id"] for s in smells})) if smells else ""
+
+    return {
+        "file_path": file_path,
+        "build_type": build_type,
+        "smells": smells,
+        "smell_count": smell_count,
+        "smell_density": round((smell_count / max(loc, 1)) * 1000, 4),
+        "smell_summary": smell_summary,
+    }
+
+
+def compute_smells_for_snapshot(snapshot_path: str, tool_name: str) -> dict:
+    global _SMELL_EXTRACTOR_IMPORT_FAILED, _EXTRACT_MAINTAINABILITY_SMELLS
+
+    if not snapshot_path or not os.path.exists(snapshot_path):
+        return empty_smell_result()
+
+    build_type = normalize_build_type_for_smells(tool_name)
+    if build_type == "unknown":
+        return empty_smell_result()
+
+    if _EXTRACT_MAINTAINABILITY_SMELLS is None and not _SMELL_EXTRACTOR_IMPORT_FAILED:
+        try:
+            tools_dir = os.path.join(REPO_ROOT, "tools")
+            package_dir = os.path.join(tools_dir, "secure_linter")
+            module_path = os.path.join(package_dir, "maintainability_smells.py")
+
+            if "tools" not in sys.modules:
+                tools_pkg = types.ModuleType("tools")
+                tools_pkg.__path__ = [tools_dir]
+                sys.modules["tools"] = tools_pkg
+
+            if "tools.secure_linter" not in sys.modules:
+                secure_linter_pkg = types.ModuleType("tools.secure_linter")
+                secure_linter_pkg.__path__ = [package_dir]
+                sys.modules["tools.secure_linter"] = secure_linter_pkg
+
+            spec = importlib.util.spec_from_file_location(
+                "tools.secure_linter.maintainability_smells",
+                module_path,
+            )
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Could not load spec for {module_path}")
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            _EXTRACT_MAINTAINABILITY_SMELLS = module.extract_maintainability_smells
+        except Exception as exc:
+            if not _SMELL_EXTRACTOR_IMPORT_FAILED:
+                print(f"[WARN] Maintainability smell extractor unavailable: {exc}")
+                _SMELL_EXTRACTOR_IMPORT_FAILED = True
+            return empty_smell_result()
+
+    try:
+        return _EXTRACT_MAINTAINABILITY_SMELLS(snapshot_path, build_type=build_type)
+    except Exception as exc:
+        print(f"[WARN] Smell extraction failed for {snapshot_path}: {exc}")
+        return empty_smell_result()
+
+
+def compute_security_smells_for_snapshot(snapshot_path: str, tool_name: str) -> dict:
+    global _SECURITY_SMELL_EXTRACTOR_IMPORT_FAILED, _EXTRACT_SECURITY_SMELLS
+
+    if not snapshot_path or not os.path.exists(snapshot_path):
+        return empty_smell_result()
+
+    build_type = normalize_build_type_for_smells(tool_name)
+    if build_type not in {"ant", "gradle", "maven"}:
+        return empty_smell_result()
+
+    if _EXTRACT_SECURITY_SMELLS is None and not _SECURITY_SMELL_EXTRACTOR_IMPORT_FAILED:
+        try:
+            tools_dir = os.path.join(REPO_ROOT, "tools")
+            package_dir = os.path.join(tools_dir, "secure_linter")
+            module_path = os.path.join(package_dir, "security_smells.py")
+
+            if "tools" not in sys.modules:
+                tools_pkg = types.ModuleType("tools")
+                tools_pkg.__path__ = [tools_dir]
+                sys.modules["tools"] = tools_pkg
+
+            if "tools.secure_linter" not in sys.modules:
+                secure_linter_pkg = types.ModuleType("tools.secure_linter")
+                secure_linter_pkg.__path__ = [package_dir]
+                sys.modules["tools.secure_linter"] = secure_linter_pkg
+
+            spec = importlib.util.spec_from_file_location(
+                "tools.secure_linter.security_smells",
+                module_path,
+            )
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Could not load spec for {module_path}")
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            _EXTRACT_SECURITY_SMELLS = module.extract_security_smells
+        except Exception as exc:
+            if not _SECURITY_SMELL_EXTRACTOR_IMPORT_FAILED:
+                print(f"[WARN] Security smell extractor unavailable: {exc}")
+                _SECURITY_SMELL_EXTRACTOR_IMPORT_FAILED = True
+            return empty_smell_result()
+
+    try:
+        return _EXTRACT_SECURITY_SMELLS(snapshot_path, build_type=build_type)
+    except Exception as exc:
+        print(f"[WARN] Security smell extraction failed for {snapshot_path}: {exc}")
+        return empty_smell_result()
 
 
 def compute_cc(snapshot_path: str, original_file_path: str) -> int:
@@ -179,38 +334,14 @@ def compute_change_frequency_metric(file_path: str, commit_sha: str) -> int:
     return compute_change_frequency_for_file_at_commit(file_path, commit_sha)
 
 
-def flatten_smell_result(prefix: str, smell_result: dict) -> dict:
+def flatten_smell_result(prefix: str, smell_result: dict, tracked_smells: list[str], base_label: str = "Smell") -> dict:
     row = {
-        f"{prefix}_Smell_Count": smell_result.get("smell_count", 0),
-        f"{prefix}_Smell_Density": smell_result.get("smell_density", 0.0),
-        f"{prefix}_Smell_Summary": smell_result.get("smell_summary", "")
+        f"{prefix}_{base_label}_Count": smell_result.get("smell_count", 0),
+        f"{prefix}_{base_label}_Density": smell_result.get("smell_density", 0.0),
+        f"{prefix}_{base_label}_Summary": smell_result.get("smell_summary", "")
     }
 
     smell_ids = {s["smell_id"] for s in smell_result.get("smells", [])}
-
-    tracked_smells = [
-        "INSECURE_URL",
-        "HARDCODED_PATH",
-        "HARDCODED_CREDENTIAL",
-        "DUPLICATE_DECLARATION",
-        "MISSING_DEPENDENCY_VERSION",
-        "WILDCARD_VERSION",
-        "EMPTY_TAG",
-        "LACK_ERROR_HANDLING",
-        "SUSPICIOUS_COMMENT",
-        "COMPLEX_BUILD_LOGIC",
-        "EXEC_USAGE",
-        "DUPLICATE_TARGET",
-        "EXCESSIVE_TARGET_DEPENDENCIES",
-        "LONG_LINE",
-        "BAD_CLASS_NAME",
-        "BAD_METHOD_NAME",
-        "LONG_VARIABLE_NAME",
-        "BAD_FIELD_NAME",
-        "TOO_MANY_PARAMETERS",
-        "LARGE_LOOP",
-        "DUPLICATE_LOGIC_BLOCK",
-    ]
 
     for smell in tracked_smells:
         row[f"{prefix}_{smell}"] = 1 if smell in smell_ids else 0
@@ -257,59 +388,61 @@ def write_summary(rows: list[dict]) -> None:
         "Smell_Density_Delta",
         "Introduced_Smells",
         "Removed_Smells",
+        "Before_Security_Smell_Count",
+        "After_Security_Smell_Count",
+        "Before_Security_Smell_Density",
+        "After_Security_Smell_Density",
+        "Before_Security_Smell_Summary",
+        "After_Security_Smell_Summary",
+        "Security_Smell_Count_Delta",
+        "Security_Smell_Density_Delta",
+        "Introduced_Security_Smells",
+        "Removed_Security_Smells",
 
-        "Before_INSECURE_URL",
-        "Before_HARDCODED_PATH",
-        "Before_HARDCODED_CREDENTIAL",
-        "Before_DUPLICATE_DECLARATION",
+        "Before_COMPLEXITY",
+        "Before_DUPLICATES",
+        "Before_EMPTY_INCOMPLETE_TAGS",
+        "Before_INCONSISTENT_DEPENDENCY_MANAGEMENT",
+        "Before_LACK_OF_ERROR_HANDLING",
         "Before_MISSING_DEPENDENCY_VERSION",
-        "Before_WILDCARD_VERSION",
-        "Before_EMPTY_TAG",
-        "Before_LACK_ERROR_HANDLING",
-        "Before_SUSPICIOUS_COMMENT",
-        "Before_COMPLEX_BUILD_LOGIC",
-        "Before_EXEC_USAGE",
-        "Before_DUPLICATE_TARGET",
-        "Before_EXCESSIVE_TARGET_DEPENDENCIES",
-        "Before_LONG_LINE",
-        "Before_BAD_CLASS_NAME",
-        "Before_BAD_METHOD_NAME",
-        "Before_LONG_VARIABLE_NAME",
-        "Before_BAD_FIELD_NAME",
-        "Before_TOO_MANY_PARAMETERS",
-        "Before_LARGE_LOOP",
-        "Before_DUPLICATE_LOGIC_BLOCK",
+        "Before_SUSPICIOUS_COMMENTS",
+        "Before_DEPRECATED_DEPENDENCIES",
+        "Before_OUTDATED_DEPENDENCIES",
 
-        "After_INSECURE_URL",
-        "After_HARDCODED_PATH",
-        "After_HARDCODED_CREDENTIAL",
-        "After_DUPLICATE_DECLARATION",
+        "After_COMPLEXITY",
+        "After_DUPLICATES",
+        "After_EMPTY_INCOMPLETE_TAGS",
+        "After_INCONSISTENT_DEPENDENCY_MANAGEMENT",
+        "After_LACK_OF_ERROR_HANDLING",
         "After_MISSING_DEPENDENCY_VERSION",
-        "After_WILDCARD_VERSION",
-        "After_EMPTY_TAG",
-        "After_LACK_ERROR_HANDLING",
-        "After_SUSPICIOUS_COMMENT",
-        "After_COMPLEX_BUILD_LOGIC",
-        "After_EXEC_USAGE",
-        "After_DUPLICATE_TARGET",
-        "After_EXCESSIVE_TARGET_DEPENDENCIES",
-        "After_LONG_LINE",
-        "After_BAD_CLASS_NAME",
-        "After_BAD_METHOD_NAME",
-        "After_LONG_VARIABLE_NAME",
-        "After_BAD_FIELD_NAME",
-        "After_TOO_MANY_PARAMETERS",
-        "After_LARGE_LOOP",
-        "After_DUPLICATE_LOGIC_BLOCK",
+        "After_SUSPICIOUS_COMMENTS",
+        "After_DEPRECATED_DEPENDENCIES",
+        "After_OUTDATED_DEPENDENCIES",
+        "Before_HARDCODED_CREDENTIALS",
+        "Before_INSECURE_URLS",
+        "Before_WILDCARD_USAGE",
+        "Before_HARDCODED_PATHS_AND_URLS",
+        "After_HARDCODED_CREDENTIALS",
+        "After_INSECURE_URLS",
+        "After_WILDCARD_USAGE",
+        "After_HARDCODED_PATHS_AND_URLS",
     ]
 
     file_exists = os.path.exists(SUMMARY_CSV)
     write_header = True
+    mode = "a"
 
     if file_exists and os.path.getsize(SUMMARY_CSV) > 0:
-        write_header = False
+        with open(SUMMARY_CSV, "r", encoding="utf-8", newline="") as existing:
+            first_line = existing.readline().strip()
+        expected_header = ",".join(header)
+        if first_line == expected_header:
+            write_header = False
+        else:
+            print(f"[WARN] Rewriting {SUMMARY_CSV} to match updated smell columns.")
+            mode = "w"
 
-    with open(SUMMARY_CSV, "a", newline="", encoding="utf-8") as f:
+    with open(SUMMARY_CSV, mode, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=header)
 
         if write_header:
@@ -391,9 +524,7 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
         print("No target build files changed in this commit.")
         return
 
-    sniffer = SnifferAdapter()
-
-    parent_sha = None
+    commit_parent_sha = None
     snapshots_probe = materialize_before_after_files(
         owner=owner,
         repo=repo,
@@ -401,10 +532,10 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
         token=token,
         rel_path=changed_files[0]["path"],
     )
-    parent_sha = snapshots_probe["parent_sha"]
+    commit_parent_sha = snapshots_probe["parent_sha"]
     cleanup_temp_files(snapshots_probe["before_temp"], snapshots_probe["after_temp"])
 
-    before_project_dir = materialize_project_snapshot(owner, repo, parent_sha, token) if parent_sha else ""
+    before_project_dir = materialize_project_snapshot(owner, repo, commit_parent_sha, token) if commit_parent_sha else ""
     after_project_dir = materialize_project_snapshot(owner, repo, commit_sha, token)
 
     try:
@@ -437,7 +568,6 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
 
             try:
                 tool = detect_build_tool(rel_path)
-                sniffer_build_type = normalize_build_type_for_sniffer(tool)
 
                 bloc_before = compute_bloc(before_temp) if before_temp else 0
                 bloc_after = compute_bloc(after_temp) if after_temp else 0
@@ -463,8 +593,10 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                 cf_before = compute_change_frequency_metric(rel_path, parent_sha) if parent_sha else 0
                 cf_after = cf_before + 1
 
-                before_smells = sniffer.detect_smells(before_temp, sniffer_build_type) if before_temp else sniffer.empty_result()
-                after_smells = sniffer.detect_smells(after_temp, sniffer_build_type) if after_temp else sniffer.empty_result()
+                before_smells = compute_smells_for_snapshot(before_temp, tool)
+                after_smells = compute_smells_for_snapshot(after_temp, tool)
+                before_security_smells = compute_security_smells_for_snapshot(before_temp, tool)
+                after_security_smells = compute_security_smells_for_snapshot(after_temp, tool)
 
                 row = {
                     "Commit_SHA": commit_sha,
@@ -494,12 +626,20 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     "Churn_After": churn_after,
                     "Change_Frequency_Before": cf_before,
                     "Change_Frequency_After": cf_after,
-                    **flatten_smell_result("Before", before_smells),
-                    **flatten_smell_result("After", after_smells),
+                    **flatten_smell_result("Before", before_smells, TRACKED_SMELLS),
+                    **flatten_smell_result("After", after_smells, TRACKED_SMELLS),
+                    **flatten_smell_result("Before", before_security_smells, TRACKED_SECURITY_SMELLS, "Security_Smell"),
+                    **flatten_smell_result("After", after_security_smells, TRACKED_SECURITY_SMELLS, "Security_Smell"),
                     "Smell_Count_Delta": after_smells["smell_count"] - before_smells["smell_count"],
                     "Smell_Density_Delta": round(after_smells["smell_density"] - before_smells["smell_density"], 4),
                     "Introduced_Smells": 1 if after_smells["smell_count"] > before_smells["smell_count"] else 0,
                     "Removed_Smells": 1 if after_smells["smell_count"] < before_smells["smell_count"] else 0,
+                    "Security_Smell_Count_Delta": after_security_smells["smell_count"] - before_security_smells["smell_count"],
+                    "Security_Smell_Density_Delta": round(
+                        after_security_smells["smell_density"] - before_security_smells["smell_density"], 4
+                    ),
+                    "Introduced_Security_Smells": 1 if after_security_smells["smell_count"] > before_security_smells["smell_count"] else 0,
+                    "Removed_Security_Smells": 1 if after_security_smells["smell_count"] < before_security_smells["smell_count"] else 0,
                 }
 
                 summary_rows.append(row)
@@ -515,11 +655,107 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     f"Modularity {modularity_before}->{modularity_after} | "
                     f"Churn {churn_before}->{churn_after} | "
                     f"CF {cf_before}->{cf_after} | "
-                    f"Smells {before_smells['smell_count']}->{after_smells['smell_count']}"
+                    f"Smells {before_smells['smell_count']}->{after_smells['smell_count']} | "
+                    f"Security {before_security_smells['smell_count']}->{after_security_smells['smell_count']}"
                 )
 
             finally:
                 cleanup_temp_files(before_temp, after_temp)
+
+        total_before_smells = sum(row.get("Before_Smell_Count", 0) for row in summary_rows)
+        total_after_smells = sum(row.get("After_Smell_Count", 0) for row in summary_rows)
+        total_before_security_smells = sum(row.get("Before_Security_Smell_Count", 0) for row in summary_rows)
+        total_after_security_smells = sum(row.get("After_Security_Smell_Count", 0) for row in summary_rows)
+        total_bloc_before = sum(row.get("BLOC_Before", 0) for row in summary_rows)
+        total_bloc_after = sum(row.get("BLOC_After", 0) for row in summary_rows)
+        total_before_density = round((total_before_smells / max(total_bloc_before, 1)) * 1000, 4)
+        total_after_density = round((total_after_smells / max(total_bloc_after, 1)) * 1000, 4)
+        total_before_security_density = round((total_before_security_smells / max(total_bloc_before, 1)) * 1000, 4)
+        total_after_security_density = round((total_after_security_smells / max(total_bloc_after, 1)) * 1000, 4)
+        total_before_summary = ";".join(sorted({
+            smell_id
+            for row in summary_rows
+            for smell_id in (row.get("Before_Smell_Summary", "") or "").split(";")
+            if smell_id
+        }))
+        total_after_summary = ";".join(sorted({
+            smell_id
+            for row in summary_rows
+            for smell_id in (row.get("After_Smell_Summary", "") or "").split(";")
+            if smell_id
+        }))
+        total_before_security_summary = ";".join(sorted({
+            smell_id
+            for row in summary_rows
+            for smell_id in (row.get("Before_Security_Smell_Summary", "") or "").split(";")
+            if smell_id
+        }))
+        total_after_security_summary = ";".join(sorted({
+            smell_id
+            for row in summary_rows
+            for smell_id in (row.get("After_Security_Smell_Summary", "") or "").split(";")
+            if smell_id
+        }))
+
+        totals_row = {
+            "Commit_SHA": commit_sha,
+            "Parent_SHA": commit_parent_sha or "",
+            "File_Path": "__COMMIT_TOTAL__",
+            "File_Name": "__COMMIT_TOTAL__",
+            "Tool": "ALL",
+            "Status": "SUMMARY",
+            "Additions": sum(row.get("Additions", 0) for row in summary_rows),
+            "Deletions": sum(row.get("Deletions", 0) for row in summary_rows),
+            "Changes": sum(row.get("Changes", 0) for row in summary_rows),
+            "BLOC_Before": sum(row.get("BLOC_Before", 0) for row in summary_rows),
+            "BLOC_After": sum(row.get("BLOC_After", 0) for row in summary_rows),
+            "Cyclomatic_Complexity_Before": sum(row.get("Cyclomatic_Complexity_Before", 0) for row in summary_rows),
+            "Cyclomatic_Complexity_After": sum(row.get("Cyclomatic_Complexity_After", 0) for row in summary_rows),
+            "Halstead_Volume_Before": round(sum(row.get("Halstead_Volume_Before", 0.0) for row in summary_rows), 2),
+            "Halstead_Volume_After": round(sum(row.get("Halstead_Volume_After", 0.0) for row in summary_rows), 2),
+            "Style_Conformance_Score_Before": "",
+            "Style_Conformance_Score_After": "",
+            "Clone_Density_Before": "",
+            "Clone_Density_After": "",
+            "Build_Cohesion_Before": "",
+            "Build_Cohesion_After": "",
+            "Build_Modularity_Before": modularity_before,
+            "Build_Modularity_After": modularity_after,
+            "Churn_Before": sum(row.get("Churn_Before", 0) for row in summary_rows),
+            "Churn_After": sum(row.get("Churn_After", 0) for row in summary_rows),
+            "Change_Frequency_Before": sum(row.get("Change_Frequency_Before", 0) for row in summary_rows),
+            "Change_Frequency_After": sum(row.get("Change_Frequency_After", 0) for row in summary_rows),
+            "Before_Smell_Count": total_before_smells,
+            "After_Smell_Count": total_after_smells,
+            "Before_Smell_Density": total_before_density,
+            "After_Smell_Density": total_after_density,
+            "Before_Smell_Summary": total_before_summary,
+            "After_Smell_Summary": total_after_summary,
+            "Smell_Count_Delta": total_after_smells - total_before_smells,
+            "Smell_Density_Delta": round(total_after_density - total_before_density, 4),
+            "Introduced_Smells": 1 if total_after_smells > total_before_smells else 0,
+            "Removed_Smells": 1 if total_after_smells < total_before_smells else 0,
+            "Before_Security_Smell_Count": total_before_security_smells,
+            "After_Security_Smell_Count": total_after_security_smells,
+            "Before_Security_Smell_Density": total_before_security_density,
+            "After_Security_Smell_Density": total_after_security_density,
+            "Before_Security_Smell_Summary": total_before_security_summary,
+            "After_Security_Smell_Summary": total_after_security_summary,
+            "Security_Smell_Count_Delta": total_after_security_smells - total_before_security_smells,
+            "Security_Smell_Density_Delta": round(total_after_security_density - total_before_security_density, 4),
+            "Introduced_Security_Smells": 1 if total_after_security_smells > total_before_security_smells else 0,
+            "Removed_Security_Smells": 1 if total_after_security_smells < total_before_security_smells else 0,
+        }
+
+        for smell_id in TRACKED_SMELLS:
+            totals_row[f"Before_{smell_id}"] = 1 if any(row.get(f"Before_{smell_id}") for row in summary_rows) else 0
+            totals_row[f"After_{smell_id}"] = 1 if any(row.get(f"After_{smell_id}") for row in summary_rows) else 0
+
+        for smell_id in TRACKED_SECURITY_SMELLS:
+            totals_row[f"Before_{smell_id}"] = 1 if any(row.get(f"Before_{smell_id}") for row in summary_rows) else 0
+            totals_row[f"After_{smell_id}"] = 1 if any(row.get(f"After_{smell_id}") for row in summary_rows) else 0
+
+        summary_rows.append(totals_row)
 
         write_summary(summary_rows)
         print("\nBefore/after analysis completed for all metrics and smells.")
