@@ -9,6 +9,7 @@ BUILD_PATHS = {
     "FilesExamples/build.xml",
     "FilesExamples/pom.xml",
     "FilesExamples/build.gradle",
+    "FilesExamples/build.gradle.kts",
     "FilesExamples/TestScript.groovy",
     "FilesExamples/gradle_multi/settings.gradle",
     "FilesExamples/gradle_multi/app/build.gradle",

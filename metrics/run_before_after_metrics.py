@@ -2,31 +2,42 @@ import os
 import sys
 import csv
 import shutil
+import argparse
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+
+for path in (BASE_DIR, REPO_ROOT):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 from metrics.BLOC import compute_bloc
 from cyclomatic_complexity import (
-    calculate_ant_cc,
-    calculate_maven_cc,
-    calculate_groovy_cc,
+    calculate_ant_build_logic_complexity,
+    calculate_maven_build_logic_complexity,
+    calculate_gradle_cc,
+    calculate_gradle_kts_cc,
 )
 from halstead_volume import compute_halstead
 from clone_density import compute_clone_density
 from build_cohesion import compute_build_cohesion_value
 from build_modularity import compute_project_modularity
-from churn import compute_churn_for_file_at_commit
-from change_frequency import compute_change_frequency_for_file_at_commit
 from github_commits_util import (
     get_changed_build_files,
     materialize_before_after_files,
     materialize_project_snapshot,
 )
 from sniffer_adapter import SnifferAdapter
+from style_conformance import (
+    calculate_gradle_kts_style_violations,
+    calculate_gradle_style_violations,
+    compute_style_score,
+    count_ant_style_violations,
+    count_maven_style_violations,
+)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
-SUMMARY_CSV = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
+OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "results")
+SUMMARY_CSV = os.path.join(BASE_DIR, "..", "results", "summary_metrics.csv")
 
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
@@ -84,11 +95,13 @@ def compute_cc(snapshot_path: str, original_file_path: str) -> int:
     tool = detect_build_tool(original_file_path)
 
     if tool == "Ant":
-        return calculate_ant_cc(snapshot_path)
+        return calculate_ant_build_logic_complexity(snapshot_path)
     elif tool == "Maven":
-        return calculate_maven_cc(snapshot_path)
-    elif tool in ("Gradle", "Gradle/Groovy"):
-        return calculate_groovy_cc(snapshot_path)
+        return calculate_maven_build_logic_complexity(snapshot_path)
+    elif original_file_path.lower().endswith(".gradle.kts"):
+        return calculate_gradle_kts_cc(snapshot_path) or 0
+    elif tool == "Gradle":
+        return calculate_gradle_cc(snapshot_path) or 0
 
     return 0
 
@@ -97,6 +110,31 @@ def compute_halstead_for_snapshot(snapshot_path: str, original_filename: str) ->
     if not snapshot_path or not os.path.exists(snapshot_path):
         return 0.0
     return compute_halstead(os.path.basename(original_filename), snapshot_path)
+
+
+def compute_style_conformance_for_snapshot(snapshot_path: str, original_file_path: str) -> float:
+    if not snapshot_path or not os.path.exists(snapshot_path):
+        return 0.0
+
+    bloc = compute_bloc(snapshot_path)
+    if bloc <= 0:
+        return 0.0
+
+    tool = detect_build_tool(original_file_path)
+
+    if tool == "Ant":
+        weighted_violations = count_ant_style_violations(snapshot_path)
+    elif tool == "Maven":
+        weighted_violations = count_maven_style_violations(snapshot_path)
+    elif original_file_path.lower().endswith(".gradle.kts"):
+        weighted_violations = calculate_gradle_kts_style_violations(snapshot_path)
+    elif tool == "Gradle":
+        weighted_violations = calculate_gradle_style_violations(snapshot_path)
+    else:
+        return 0.0
+
+    score = compute_style_score(bloc, weighted_violations) if weighted_violations is not None else None
+    return round(score, 2) if score is not None else 0.0
 
 
 def compute_clone_density_for_snapshot(snapshot_path: str) -> float:
@@ -109,6 +147,36 @@ def compute_build_cohesion_for_snapshot(snapshot_path: str) -> float:
     if not snapshot_path or not os.path.exists(snapshot_path):
         return 0.0
     return compute_build_cohesion_value(snapshot_path)
+
+
+def compute_churn_metric(file_path: str, commit_sha: str) -> int:
+    if not commit_sha:
+        return 0
+
+    try:
+        from churn import compute_churn_for_file_at_commit
+    except ModuleNotFoundError as exc:
+        if exc.name == "pydriller":
+            print("[WARN] pydriller is not installed; Churn metrics will be reported as 0.")
+            return 0
+        raise
+
+    return compute_churn_for_file_at_commit(file_path, commit_sha)
+
+
+def compute_change_frequency_metric(file_path: str, commit_sha: str) -> int:
+    if not commit_sha:
+        return 0
+
+    try:
+        from change_frequency import compute_change_frequency_for_file_at_commit
+    except ModuleNotFoundError as exc:
+        if exc.name == "pydriller":
+            print("[WARN] pydriller is not installed; Change Frequency metrics will be reported as 0.")
+            return 0
+        raise
+
+    return compute_change_frequency_for_file_at_commit(file_path, commit_sha)
 
 
 def flatten_smell_result(prefix: str, smell_result: dict) -> dict:
@@ -167,6 +235,8 @@ def write_summary(rows: list[dict]) -> None:
         "Cyclomatic_Complexity_After",
         "Halstead_Volume_Before",
         "Halstead_Volume_After",
+        "Style_Conformance_Score_Before",
+        "Style_Conformance_Score_After",
         "Clone_Density_Before",
         "Clone_Density_After",
         "Build_Cohesion_Before",
@@ -262,6 +332,56 @@ def cleanup_temp_files(*paths):
                 print(f"[WARN] Could not remove temp path {path}: {e}")
 
 
+def canonicalize_column_name(name: str) -> str:
+    return (name or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def read_commit_jobs_from_csv(csv_path: str) -> list[dict[str, str]]:
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV file not found: {csv_path}")
+
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        if not reader.fieldnames:
+            raise ValueError("CSV file must include a header row.")
+
+        field_map = {canonicalize_column_name(name): name for name in reader.fieldnames}
+        required = ["owner", "repo", "commit_sha"]
+        missing = [name for name in required if name not in field_map]
+        if missing:
+            raise ValueError(
+                "CSV file is missing required columns: "
+                + ", ".join(missing)
+            )
+
+        jobs = []
+        for row_num, row in enumerate(reader, start=2):
+            owner = (row.get(field_map["owner"], "") or "").strip()
+            repo = (row.get(field_map["repo"], "") or "").strip()
+            commit_sha = (row.get(field_map["commit_sha"], "") or "").strip()
+
+            if not owner and not repo and not commit_sha:
+                continue
+
+            if not owner or not repo or not commit_sha:
+                print(
+                    f"[WARN] Skipping CSV row {row_num}: owner, repo, and commit_sha "
+                    "must all be non-empty."
+                )
+                continue
+
+            jobs.append({
+                "owner": owner,
+                "repo": repo,
+                "commit_sha": commit_sha,
+            })
+
+    if not jobs:
+        raise ValueError("No valid commit jobs found in CSV file.")
+
+    return jobs
+
+
 def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str) -> None:
     print(f"\nFetching changed build files for commit: {commit_sha}\n")
 
@@ -328,16 +448,19 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                 halstead_before = compute_halstead_for_snapshot(before_temp, basename) if before_temp else 0.0
                 halstead_after = compute_halstead_for_snapshot(after_temp, basename) if after_temp else 0.0
 
+                style_before = compute_style_conformance_for_snapshot(before_temp, rel_path) if before_temp else 0.0
+                style_after = compute_style_conformance_for_snapshot(after_temp, rel_path) if after_temp else 0.0
+
                 clone_before = compute_clone_density_for_snapshot(before_temp) if before_temp else 0.0
                 clone_after = compute_clone_density_for_snapshot(after_temp) if after_temp else 0.0
 
                 cohesion_before = compute_build_cohesion_for_snapshot(before_temp) if before_temp else 0.0
                 cohesion_after = compute_build_cohesion_for_snapshot(after_temp) if after_temp else 0.0
 
-                churn_before = compute_churn_for_file_at_commit(rel_path, parent_sha) if parent_sha else 0
+                churn_before = compute_churn_metric(rel_path, parent_sha) if parent_sha else 0
                 churn_after = churn_before + additions + deletions
 
-                cf_before = compute_change_frequency_for_file_at_commit(rel_path, parent_sha) if parent_sha else 0
+                cf_before = compute_change_frequency_metric(rel_path, parent_sha) if parent_sha else 0
                 cf_after = cf_before + 1
 
                 before_smells = sniffer.detect_smells(before_temp, sniffer_build_type) if before_temp else sniffer.empty_result()
@@ -359,6 +482,8 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     "Cyclomatic_Complexity_After": cc_after,
                     "Halstead_Volume_Before": halstead_before,
                     "Halstead_Volume_After": halstead_after,
+                    "Style_Conformance_Score_Before": style_before,
+                    "Style_Conformance_Score_After": style_after,
                     "Clone_Density_Before": clone_before,
                     "Clone_Density_After": clone_after,
                     "Build_Cohesion_Before": cohesion_before,
@@ -384,6 +509,7 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     f"BLOC {bloc_before}->{bloc_after} | "
                     f"CC {cc_before}->{cc_after} | "
                     f"HV {halstead_before}->{halstead_after} | "
+                    f"Style {style_before}->{style_after} | "
                     f"CD {clone_before}->{clone_after} | "
                     f"Cohesion {cohesion_before}->{cohesion_after} | "
                     f"Modularity {modularity_before}->{modularity_after} | "
@@ -403,21 +529,55 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("Usage: python run_before_after_metrics.py <owner> <repo> <commit_sha> [github_token]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run before/after build metrics for a GitHub commit, or for multiple "
+            "commits listed in a CSV file."
+        )
+    )
+    parser.add_argument("owner", nargs="?", help="GitHub repository owner")
+    parser.add_argument("repo", nargs="?", help="GitHub repository name")
+    parser.add_argument("commit_sha", nargs="?", help="Commit SHA to analyze")
+    parser.add_argument(
+        "github_token",
+        nargs="?",
+        help="GitHub token. If omitted, GITHUB_TOKEN is used.",
+    )
+    parser.add_argument(
+        "--csv",
+        dest="csv_path",
+        help=(
+            "Path to a CSV file with columns: owner, repo, commit_sha. "
+            "When provided, the positional owner/repo/commit_sha arguments are not required."
+        ),
+    )
+    args = parser.parse_args()
 
-    owner = sys.argv[1].strip()
-    repo = sys.argv[2].strip()
-    commit_sha = sys.argv[3].strip()
-
-    if len(sys.argv) >= 5:
-        token = sys.argv[4].strip()
-    else:
-        token = os.environ.get("GITHUB_TOKEN", "").strip()
-
+    token = (args.github_token or os.environ.get("GITHUB_TOKEN", "")).strip()
     if not token:
         print("ERROR: GitHub token not provided.")
         sys.exit(1)
 
-    run_before_after_metrics(owner, repo, commit_sha, token)
+    if args.csv_path:
+        jobs = read_commit_jobs_from_csv(args.csv_path)
+        for job in jobs:
+            print(
+                f"\n=== Running commit job: {job['owner']}/{job['repo']} "
+                f"@ {job['commit_sha']} ==="
+            )
+            run_before_after_metrics(
+                owner=job["owner"],
+                repo=job["repo"],
+                commit_sha=job["commit_sha"],
+                token=token,
+            )
+        sys.exit(0)
+
+    if not (args.owner and args.repo and args.commit_sha):
+        print(
+            "Usage: python run_before_after_metrics.py <owner> <repo> <commit_sha> [github_token]\n"
+            "   or: python run_before_after_metrics.py --csv <jobs.csv> [github_token]"
+        )
+        sys.exit(1)
+
+    run_before_after_metrics(args.owner.strip(), args.repo.strip(), args.commit_sha.strip(), token)

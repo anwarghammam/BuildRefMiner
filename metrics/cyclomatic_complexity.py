@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
-SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
+SUMMARY_FILE = os.path.join(BASE_DIR, "..", "results", "summary_metrics.csv")
 TOOLS_DIR = os.path.join(BASE_DIR, "..", "tools")
 CODENARC_CONFIG = os.path.join(BASE_DIR, "..", "config", "codenarc.groovy")
 DETEKT_CONFIG = os.path.join(BASE_DIR, "..", "config", "detekt.yml")

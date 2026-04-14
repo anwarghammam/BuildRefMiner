@@ -7,7 +7,7 @@ from collections import Counter
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
-SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
+SUMMARY_FILE = os.path.join(BASE_DIR, "..", "results", "summary_metrics.csv")
 
 GROOVY_HALSTEAD_SCRIPT = os.path.join(BASE_DIR, "halstead_groovy_ast.groovy")
 

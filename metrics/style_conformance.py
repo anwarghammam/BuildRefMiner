@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(BASE_DIR, "..", "FilesExamples")
-SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
+SUMMARY_FILE = os.path.join(BASE_DIR, "..", "results", "summary_metrics.csv")
 TOOLS_DIR = os.path.join(BASE_DIR, "..", "tools")
 CODENARC_STYLE_CONFIG = os.path.join(BASE_DIR, "..", "config", "codenarc_style.groovy")
 DETEKT_STYLE_CONFIG = os.path.join(BASE_DIR, "..", "config", "detekt_style.yml")

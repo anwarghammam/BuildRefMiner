@@ -7,7 +7,7 @@ from itertools import combinations
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 FILES_DIR = os.path.join(PROJECT_ROOT, "FilesExamples")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_builds")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "results")
 OUTPUT_CSV = os.path.join(OUTPUT_DIR, "build_cohesion.csv")
 
 

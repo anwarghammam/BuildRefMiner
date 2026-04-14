@@ -6,7 +6,7 @@ from collections import defaultdict
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FILES_DIR = os.path.join(BASE_DIR, "..", "FilesExamples")
-SUMMARY_FILE = os.path.join(BASE_DIR, "..", "processed_builds", "summary_metrics.csv")
+SUMMARY_FILE = os.path.join(BASE_DIR, "..", "results", "summary_metrics.csv")
 
 # Minimum clone block size
 MIN_CLONE_LEN = 5

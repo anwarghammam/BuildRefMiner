@@ -51,6 +51,10 @@ SCS = max(0, 100 - ((violations / BLOC) * 100))
 - Kotlin DSL style rules: [`config/detekt_style.yml`](/Users/aghammam/Desktop/BuildRefMiner/config/detekt_style.yml)
 - Style scoring pipeline: [`metrics/style_conformance.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/style_conformance.py)
 
+Repository layout note:
+- [`config/`](/Users/aghammam/Desktop/BuildRefMiner/config) stores rule definitions and thresholds used by the metric pipelines.
+- [`tools/`](/Users/aghammam/Desktop/BuildRefMiner/tools) stores the vendored tool binaries and launcher scripts used to execute those checks.
+
 ### Run Style Scoring
 
 From the repo root:
@@ -61,7 +65,7 @@ export DETEKT_BINARY="$PWD/tools/detekt/detekt"
 python3 metrics/style_conformance.py
 ```
 
-This writes `Style_Conformance_Score` into [`processed_builds/summary_metrics.csv`](/Users/aghammam/Desktop/BuildRefMiner/processed_builds/summary_metrics.csv).
+This writes `Style_Conformance_Score` into [`results/summary_metrics.csv`](/Users/aghammam/Desktop/BuildRefMiner/results/summary_metrics.csv).
 
 ### Complexity Tooling Notes
 

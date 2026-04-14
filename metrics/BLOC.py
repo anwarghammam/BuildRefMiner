@@ -10,10 +10,10 @@ import tempfile
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "processed_builds")
+RESULTS_FOLDER = os.path.join(BASE_DIR, "..", "results")
 SCC_BINARY = os.path.join(BASE_DIR, "..", "tools", "scc", "scc")
 
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+os.makedirs(RESULTS_FOLDER, exist_ok=True)
 
 def compute_bloc_with_scc(file_path: str) -> int | None:
     if not os.path.exists(SCC_BINARY):
@@ -60,7 +60,7 @@ def compute_bloc_from_content(filename: str, content: str) -> int:
 
 
 def update_summary(summary_data: list[list[str | int]]) -> None:
-    summary_path = os.path.join(OUTPUT_FOLDER, "summary_metrics.csv")
+    summary_path = os.path.join(RESULTS_FOLDER, "summary_metrics.csv")
 
     if os.path.exists(summary_path):
         with open(summary_path, "r", encoding="utf-8") as f:
@@ -145,7 +145,7 @@ def process_file(filepath, summary_data):
 def main():
     print("Starting BLOC Analysis...\n")
     parser = argparse.ArgumentParser(
-        description="Compute BLOC for build files and store results in summary_metrics.csv."
+        description="Compute BLOC for build files and store results in results/summary_metrics.csv."
     )
     parser.add_argument(
         "paths",
@@ -176,7 +176,7 @@ def main():
     update_summary(summary_data)
 
     print("\nBLOC Analysis Completed.")
-    print("Check processed_builds folder for results.")
+    print("Check results/summary_metrics.csv and the results folder for outputs.")
 
 
 # Run Script
