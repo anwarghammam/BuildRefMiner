@@ -1,6 +1,8 @@
 import os
 import re
 import csv
+import json
+import subprocess
 import xml.etree.ElementTree as ET
 from itertools import combinations
 
@@ -9,6 +11,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 FILES_DIR = os.path.join(PROJECT_ROOT, "FilesExamples")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "results")
 OUTPUT_CSV = os.path.join(OUTPUT_DIR, "build_cohesion.csv")
+GRADLE_COHESION_AST_SCRIPT = os.path.join(BASE_DIR, "gradle_cohesion_ast.groovy")
 
 
 def safe_write_csv(path, rows, fieldnames):
@@ -154,7 +157,64 @@ def gradle_feature_set(task_block):
     return features
 
 
+def _run_gradle_cohesion_ast(file_path):
+    if not os.path.exists(GRADLE_COHESION_AST_SCRIPT):
+        return None
+
+    try:
+        result = subprocess.run(
+            ["groovy", GRADLE_COHESION_AST_SCRIPT, file_path],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    payload = (result.stdout or "").strip()
+    if not payload:
+        return None
+
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    task_count = int(data.get("task_count", 0) or 0)
+    raw_feature_sets = data.get("feature_sets", [])
+    if not isinstance(raw_feature_sets, list):
+        raw_feature_sets = []
+
+    feature_sets = []
+    for features in raw_feature_sets:
+        if isinstance(features, list):
+            normalized = {str(item) for item in features if str(item).strip()}
+            if normalized:
+                feature_sets.append(normalized)
+
+    return {
+        "task_count": task_count,
+        "feature_sets": feature_sets,
+    }
+
+
 def analyze_gradle_file(file_path):
+    name = os.path.basename(file_path).lower()
+    if name.endswith(".gradle") or name.endswith(".groovy"):
+        ast_result = _run_gradle_cohesion_ast(file_path)
+        if ast_result is not None:
+            return {
+                "Module": os.path.basename(file_path),
+                "Build System": "Gradle",
+                "Task Count": ast_result["task_count"],
+                "Build Cohesion": average_pairwise_jaccard(ast_result["feature_sets"]),
+            }
+
     with open(file_path, "r", encoding="utf-8") as f:
         text = strip_gradle_comments(f.read())
 

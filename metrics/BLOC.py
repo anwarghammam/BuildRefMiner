@@ -15,7 +15,36 @@ SCC_BINARY = os.path.join(BASE_DIR, "..", "tools", "scc", "scc")
 
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
 
-def compute_bloc_with_scc(file_path: str) -> int | None:
+
+def _extract_scc_file_metrics(payload: list) -> dict[str, int]:
+    if not payload:
+        return {
+            "code": 0,
+            "comment": 0,
+            "blank": 0,
+            "lines": 0,
+        }
+
+    file_entries = payload[0].get("Files", [])
+    if file_entries:
+        entry = file_entries[0]
+        return {
+            "code": int(entry.get("Code", 0)),
+            "comment": int(entry.get("Comment", 0)),
+            "blank": int(entry.get("Blank", 0)),
+            "lines": int(entry.get("Lines", 0)),
+        }
+
+    entry = payload[0]
+    return {
+        "code": int(entry.get("Code", 0)),
+        "comment": int(entry.get("Comment", 0)),
+        "blank": int(entry.get("Blank", 0)),
+        "lines": int(entry.get("Lines", 0)),
+    }
+
+
+def compute_line_stats_with_scc(file_path: str) -> dict[str, int] | None:
     if not os.path.exists(SCC_BINARY):
         return None
 
@@ -30,14 +59,14 @@ def compute_bloc_with_scc(file_path: str) -> int | None:
     except (subprocess.SubprocessError, json.JSONDecodeError, OSError):
         return None
 
-    if not payload:
-        return 0
+    return _extract_scc_file_metrics(payload)
 
-    file_entries = payload[0].get("Files", [])
-    if not file_entries:
-        return int(payload[0].get("Code", 0))
 
-    return int(file_entries[0].get("Code", 0))
+def compute_bloc_with_scc(file_path: str) -> int | None:
+    stats = compute_line_stats_with_scc(file_path)
+    if stats is None:
+        return None
+    return stats["code"]
 
 
 def compute_bloc_from_content(filename: str, content: str) -> int:
@@ -126,6 +155,21 @@ def compute_bloc(file_path: str) -> int:
         return scc_bloc
 
     return 0
+
+
+def compute_comment_ratio(file_path: str) -> float:
+    if not file_path or not os.path.exists(file_path):
+        return 0.0
+
+    stats = compute_line_stats_with_scc(file_path)
+    if not stats:
+        return 0.0
+
+    total_lines = stats["lines"]
+    if total_lines <= 0:
+        return 0.0
+
+    return round(stats["comment"] / total_lines, 4)
 
 def process_content(filename: str, content: str, summary_data):
     total_bloc = compute_bloc_from_content(filename, content)
