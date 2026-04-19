@@ -24,8 +24,12 @@ from halstead_volume import compute_halstead
 from clone_density import compute_clone_density
 from comment_readability import compute_comment_readability_stats
 from build_cohesion import compute_build_cohesion_value
-from build_coupling import compute_build_coupling
-from build_modularity import compute_project_modularity
+from coupling import compute_build_coupling
+from dependency_stability import compute_dependency_stability
+from external_dependency_risk import compute_external_dependency_risk
+from build_determinism import compute_build_determinism
+from reliability_issues import compute_reliability_issue_count, compute_reliability_score
+from reliability_metric import compute_overall_reliability
 from github_commits_util import (
     get_changed_build_files,
     materialize_before_after_files,
@@ -78,6 +82,12 @@ _SMELL_EXTRACTOR_IMPORT_FAILED = False
 _EXTRACT_MAINTAINABILITY_SMELLS = None
 _SECURITY_SMELL_EXTRACTOR_IMPORT_FAILED = False
 _EXTRACT_SECURITY_SMELLS = None
+
+try:
+    from build_modularity import compute_project_modularity
+except ImportError:
+    def compute_project_modularity(project_dir: str) -> float:
+        return 0.0
 
 
 def detect_build_tool(file_path: str) -> str:
@@ -339,6 +349,48 @@ def compute_build_coupling_for_snapshot(snapshot_path: str, project_dir: str, bl
             "ncp_external": 0.0,
             "coupling_ratio": 0.0,
         }
+
+
+def compute_dependency_stability_for_snapshot(snapshot_path: str) -> dict:
+    if not snapshot_path or not os.path.exists(snapshot_path):
+        return {
+            "dependency_count": 0,
+            "fixed_dependency_count": 0,
+            "dynamic_dependency_count": 0,
+            "snapshot_dependency_count": 0,
+            "unknown_dependency_count": 0,
+            "dss": 0.0,
+        }
+
+
+def compute_build_determinism_for_snapshot(snapshot_path: str, bloc: int) -> dict:
+    if not snapshot_path or not os.path.exists(snapshot_path):
+        return {
+            "non_deterministic_construct_count": 0,
+            "non_deterministic_summary": "",
+            "bds": 0.0,
+        }
+    try:
+        return compute_build_determinism(snapshot_path, bloc)
+    except Exception as exc:
+        print(f"[WARN] Build determinism failed for {snapshot_path}: {exc}")
+        return {
+            "non_deterministic_construct_count": 0,
+            "non_deterministic_summary": "",
+            "bds": 0.0,
+        }
+    try:
+        return compute_dependency_stability(snapshot_path)
+    except Exception as exc:
+        print(f"[WARN] Dependency stability failed for {snapshot_path}: {exc}")
+        return {
+            "dependency_count": 0,
+            "fixed_dependency_count": 0,
+            "dynamic_dependency_count": 0,
+            "snapshot_dependency_count": 0,
+            "unknown_dependency_count": 0,
+            "dss": 0.0,
+        }
     try:
         return compute_build_coupling(snapshot_path, project_dir=project_dir, bloc=bloc)
     except Exception as exc:
@@ -417,6 +469,26 @@ def write_summary(rows: list[dict]) -> None:
         "Halstead_Volume_After",
         "Normalized_HV_Before",
         "Normalized_HV_After",
+        "Dependency_Count_Before",
+        "Dependency_Count_After",
+        "Fixed_Dependency_Count_Before",
+        "Fixed_Dependency_Count_After",
+        "Dynamic_Dependency_Count_Before",
+        "Dynamic_Dependency_Count_After",
+        "Snapshot_Dependency_Count_Before",
+        "Snapshot_Dependency_Count_After",
+        "Unknown_Dependency_Count_Before",
+        "Unknown_Dependency_Count_After",
+        "DSS_Before",
+        "DSS_After",
+        "DSS_Delta",
+        "Non_Deterministic_Constructs_Before",
+        "Non_Deterministic_Constructs_After",
+        "Non_Deterministic_Summary_Before",
+        "Non_Deterministic_Summary_After",
+        "BDS_Before",
+        "BDS_After",
+        "BDS_Delta",
         "Comment_Ratio_Before",
         "Comment_Ratio_After",
         "Comment_Readability_Before",
@@ -437,6 +509,11 @@ def write_summary(rows: list[dict]) -> None:
         "NCP_External_After",
         "Coupling_Ratio_Before",
         "Coupling_Ratio_After",
+        "External_Risk_Factors_Before",
+        "External_Risk_Factors_After",
+        "EDR_Before",
+        "EDR_After",
+        "EDR_Delta",
         "Build_Cohesion_Before",
         "Build_Cohesion_After",
         "Build_Modularity_Before",
@@ -452,6 +529,14 @@ def write_summary(rows: list[dict]) -> None:
         "Normalized_Change_Frequency_Before",
         "Normalized_Change_Frequency_After",
         "Observation_Window_Days",
+        "Reliability_Issues_Before",
+        "Reliability_Issues_After",
+        "RE_Before",
+        "RE_After",
+        "RE_Delta",
+        "RM_Before",
+        "RM_After",
+        "RM_Delta",
         "Before_Smell_Count",
         "After_Smell_Count",
         "Before_Smell_Density",
@@ -665,6 +750,32 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                 halstead_after = compute_halstead_for_snapshot(after_temp, basename) if after_temp else 0.0
                 normalized_hv_before = normalize_metric_by_bloc(halstead_before, bloc_before)
                 normalized_hv_after = normalize_metric_by_bloc(halstead_after, bloc_after)
+                dependency_stability_before = compute_dependency_stability_for_snapshot(before_temp) if before_temp else {
+                    "dependency_count": 0,
+                    "fixed_dependency_count": 0,
+                    "dynamic_dependency_count": 0,
+                    "snapshot_dependency_count": 0,
+                    "unknown_dependency_count": 0,
+                    "dss": 0.0,
+                }
+                dependency_stability_after = compute_dependency_stability_for_snapshot(after_temp) if after_temp else {
+                    "dependency_count": 0,
+                    "fixed_dependency_count": 0,
+                    "dynamic_dependency_count": 0,
+                    "snapshot_dependency_count": 0,
+                    "unknown_dependency_count": 0,
+                    "dss": 0.0,
+                }
+                determinism_before = compute_build_determinism_for_snapshot(before_temp, bloc_before) if before_temp else {
+                    "non_deterministic_construct_count": 0,
+                    "non_deterministic_summary": "",
+                    "bds": 0.0,
+                }
+                determinism_after = compute_build_determinism_for_snapshot(after_temp, bloc_after) if after_temp else {
+                    "non_deterministic_construct_count": 0,
+                    "non_deterministic_summary": "",
+                    "bds": 0.0,
+                }
 
                 comment_ratio_before = compute_comment_ratio_for_snapshot(before_temp) if before_temp else 0.0
                 comment_ratio_after = compute_comment_ratio_for_snapshot(after_temp) if after_temp else 0.0
@@ -715,6 +826,8 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     "ncp_external": 0.0,
                     "coupling_ratio": 0.0,
                 }
+                edr_before = compute_external_dependency_risk(coupling_before)
+                edr_after = compute_external_dependency_risk(coupling_after)
 
                 cohesion_before = compute_build_cohesion_for_snapshot(before_temp) if before_temp else 0.0
                 cohesion_after = compute_build_cohesion_for_snapshot(after_temp) if after_temp else 0.0
@@ -726,6 +839,12 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                 after_smells = compute_smells_for_snapshot(after_temp, tool)
                 before_security_smells = compute_security_smells_for_snapshot(before_temp, tool)
                 after_security_smells = compute_security_smells_for_snapshot(after_temp, tool)
+                reliability_issues_before = compute_reliability_issue_count(before_smells, before_security_smells)
+                reliability_issues_after = compute_reliability_issue_count(after_smells, after_security_smells)
+                re_before = compute_reliability_score(reliability_issues_before, bloc_before)
+                re_after = compute_reliability_score(reliability_issues_after, bloc_after)
+                rm_before = compute_overall_reliability(re_before, dependency_stability_before["dss"], edr_before["edr"])
+                rm_after = compute_overall_reliability(re_after, dependency_stability_after["dss"], edr_after["edr"])
 
                 row = {
                     "Commit_SHA": commit_sha,
@@ -747,6 +866,26 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     "Halstead_Volume_After": halstead_after,
                     "Normalized_HV_Before": normalized_hv_before,
                     "Normalized_HV_After": normalized_hv_after,
+                    "Dependency_Count_Before": dependency_stability_before["dependency_count"],
+                    "Dependency_Count_After": dependency_stability_after["dependency_count"],
+                    "Fixed_Dependency_Count_Before": dependency_stability_before["fixed_dependency_count"],
+                    "Fixed_Dependency_Count_After": dependency_stability_after["fixed_dependency_count"],
+                    "Dynamic_Dependency_Count_Before": dependency_stability_before["dynamic_dependency_count"],
+                    "Dynamic_Dependency_Count_After": dependency_stability_after["dynamic_dependency_count"],
+                    "Snapshot_Dependency_Count_Before": dependency_stability_before["snapshot_dependency_count"],
+                    "Snapshot_Dependency_Count_After": dependency_stability_after["snapshot_dependency_count"],
+                    "Unknown_Dependency_Count_Before": dependency_stability_before["unknown_dependency_count"],
+                    "Unknown_Dependency_Count_After": dependency_stability_after["unknown_dependency_count"],
+                    "DSS_Before": dependency_stability_before["dss"],
+                    "DSS_After": dependency_stability_after["dss"],
+                    "DSS_Delta": round(dependency_stability_after["dss"] - dependency_stability_before["dss"], 4),
+                    "Non_Deterministic_Constructs_Before": determinism_before["non_deterministic_construct_count"],
+                    "Non_Deterministic_Constructs_After": determinism_after["non_deterministic_construct_count"],
+                    "Non_Deterministic_Summary_Before": determinism_before["non_deterministic_summary"],
+                    "Non_Deterministic_Summary_After": determinism_after["non_deterministic_summary"],
+                    "BDS_Before": determinism_before["bds"],
+                    "BDS_After": determinism_after["bds"],
+                    "BDS_Delta": round(determinism_after["bds"] - determinism_before["bds"], 4),
                     "Comment_Ratio_Before": comment_ratio_before,
                     "Comment_Ratio_After": comment_ratio_after,
                     "Comment_Readability_Before": comment_readability_before["flesch_reading_ease"],
@@ -767,6 +906,11 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     "NCP_External_After": coupling_after["ncp_external"],
                     "Coupling_Ratio_Before": coupling_before["coupling_ratio"],
                     "Coupling_Ratio_After": coupling_after["coupling_ratio"],
+                    "External_Risk_Factors_Before": edr_before["external_risk_factors"],
+                    "External_Risk_Factors_After": edr_after["external_risk_factors"],
+                    "EDR_Before": edr_before["edr"],
+                    "EDR_After": edr_after["edr"],
+                    "EDR_Delta": round(edr_after["edr"] - edr_before["edr"], 4),
                     "Build_Cohesion_Before": cohesion_before,
                     "Build_Cohesion_After": cohesion_after,
                     "Build_Modularity_Before": modularity_before,
@@ -782,6 +926,14 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     "Normalized_Change_Frequency_Before": before_activity["normalized_change_frequency"],
                     "Normalized_Change_Frequency_After": after_activity["normalized_change_frequency"],
                     "Observation_Window_Days": after_activity["window_days"] or before_activity["window_days"],
+                    "Reliability_Issues_Before": reliability_issues_before,
+                    "Reliability_Issues_After": reliability_issues_after,
+                    "RE_Before": re_before,
+                    "RE_After": re_after,
+                    "RE_Delta": round(re_after - re_before, 4),
+                    "RM_Before": rm_before,
+                    "RM_After": rm_after,
+                    "RM_Delta": round(rm_after - rm_before, 4),
                     **flatten_smell_result("Before", before_smells, TRACKED_SMELLS),
                     **flatten_smell_result("After", after_smells, TRACKED_SMELLS),
                     **flatten_smell_result("Before", before_security_smells, TRACKED_SECURITY_SMELLS, "Security_Smell"),
@@ -805,15 +957,20 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
                     f"BLOC {bloc_before}->{bloc_after} | "
                     f"CC {cc_before}->{cc_after} | "
                     f"HV {halstead_before}->{halstead_after} | "
+                    f"DSS {dependency_stability_before['dss']}->{dependency_stability_after['dss']} | "
+                    f"BDS {determinism_before['bds']}->{determinism_after['bds']} | "
                     f"CR {comment_ratio_before}->{comment_ratio_after} | "
                     f"Readability {comment_readability_before['flesch_reading_ease']}->{comment_readability_after['flesch_reading_ease']} | "
                     f"Style {style_before}->{style_after} | "
                     f"CD {clone_before}->{clone_after} | "
                     f"CP {coupling_before['cp_total']}->{coupling_after['cp_total']} | "
+                    f"EDR {edr_before['edr']}->{edr_after['edr']} | "
                     f"Cohesion {cohesion_before}->{cohesion_after} | "
                     f"Modularity {modularity_before}->{modularity_after} | "
                     f"Churn {before_activity['raw_churn']}->{after_activity['raw_churn']} | "
                     f"CF {before_activity['raw_change_frequency']}->{after_activity['raw_change_frequency']} | "
+                    f"RE {re_before}->{re_after} | "
+                    f"RM {rm_before}->{rm_after} | "
                     f"Smells {before_smells['smell_count']}->{after_smells['smell_count']} | "
                     f"Security {before_security_smells['smell_count']}->{after_security_smells['smell_count']}"
                 )
@@ -827,6 +984,18 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
         total_after_security_smells = sum(row.get("After_Security_Smell_Count", 0) for row in summary_rows)
         total_bloc_before = sum(row.get("BLOC_Before", 0) for row in summary_rows)
         total_bloc_after = sum(row.get("BLOC_After", 0) for row in summary_rows)
+        total_dependency_count_before = sum(row.get("Dependency_Count_Before", 0) for row in summary_rows)
+        total_dependency_count_after = sum(row.get("Dependency_Count_After", 0) for row in summary_rows)
+        total_fixed_dependency_count_before = sum(row.get("Fixed_Dependency_Count_Before", 0) for row in summary_rows)
+        total_fixed_dependency_count_after = sum(row.get("Fixed_Dependency_Count_After", 0) for row in summary_rows)
+        total_dynamic_dependency_count_before = sum(row.get("Dynamic_Dependency_Count_Before", 0) for row in summary_rows)
+        total_dynamic_dependency_count_after = sum(row.get("Dynamic_Dependency_Count_After", 0) for row in summary_rows)
+        total_snapshot_dependency_count_before = sum(row.get("Snapshot_Dependency_Count_Before", 0) for row in summary_rows)
+        total_snapshot_dependency_count_after = sum(row.get("Snapshot_Dependency_Count_After", 0) for row in summary_rows)
+        total_unknown_dependency_count_before = sum(row.get("Unknown_Dependency_Count_Before", 0) for row in summary_rows)
+        total_unknown_dependency_count_after = sum(row.get("Unknown_Dependency_Count_After", 0) for row in summary_rows)
+        total_reliability_issues_before = sum(row.get("Reliability_Issues_Before", 0) for row in summary_rows)
+        total_reliability_issues_after = sum(row.get("Reliability_Issues_After", 0) for row in summary_rows)
         total_before_density = round((total_before_smells / max(total_bloc_before, 1)) * 1000, 4)
         total_after_density = round((total_after_smells / max(total_bloc_after, 1)) * 1000, 4)
         total_before_security_density = round((total_before_security_smells / max(total_bloc_before, 1)) * 1000, 4)
@@ -876,6 +1045,38 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
             "Halstead_Volume_After": round(sum(row.get("Halstead_Volume_After", 0.0) for row in summary_rows), 2),
             "Normalized_HV_Before": 0.0,
             "Normalized_HV_After": 0.0,
+            "Dependency_Count_Before": total_dependency_count_before,
+            "Dependency_Count_After": total_dependency_count_after,
+            "Fixed_Dependency_Count_Before": total_fixed_dependency_count_before,
+            "Fixed_Dependency_Count_After": total_fixed_dependency_count_after,
+            "Dynamic_Dependency_Count_Before": total_dynamic_dependency_count_before,
+            "Dynamic_Dependency_Count_After": total_dynamic_dependency_count_after,
+            "Snapshot_Dependency_Count_Before": total_snapshot_dependency_count_before,
+            "Snapshot_Dependency_Count_After": total_snapshot_dependency_count_after,
+            "Unknown_Dependency_Count_Before": total_unknown_dependency_count_before,
+            "Unknown_Dependency_Count_After": total_unknown_dependency_count_after,
+            "DSS_Before": round(total_fixed_dependency_count_before / max(total_dependency_count_before, 1), 4)
+            if total_dependency_count_before > 0 else 0.0,
+            "DSS_After": round(total_fixed_dependency_count_after / max(total_dependency_count_after, 1), 4)
+            if total_dependency_count_after > 0 else 0.0,
+            "DSS_Delta": 0.0,
+            "Non_Deterministic_Constructs_Before": sum(row.get("Non_Deterministic_Constructs_Before", 0) for row in summary_rows),
+            "Non_Deterministic_Constructs_After": sum(row.get("Non_Deterministic_Constructs_After", 0) for row in summary_rows),
+            "Non_Deterministic_Summary_Before": ";".join(sorted({
+                item
+                for row in summary_rows
+                for item in (row.get("Non_Deterministic_Summary_Before", "") or "").split(";")
+                if item
+            })),
+            "Non_Deterministic_Summary_After": ";".join(sorted({
+                item
+                for row in summary_rows
+                for item in (row.get("Non_Deterministic_Summary_After", "") or "").split(";")
+                if item
+            })),
+            "BDS_Before": 0.0,
+            "BDS_After": 0.0,
+            "BDS_Delta": 0.0,
             "Comment_Ratio_Before": round(total_comment_lines_before / max(total_lines_before, 1), 4),
             "Comment_Ratio_After": round(total_comment_lines_after / max(total_lines_after, 1), 4),
             "Comment_Readability_Before": 0.0,
@@ -896,6 +1097,11 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
             "NCP_External_After": 0.0,
             "Coupling_Ratio_Before": 0.0,
             "Coupling_Ratio_After": 0.0,
+            "External_Risk_Factors_Before": sum(row.get("External_Risk_Factors_Before", 0) for row in summary_rows),
+            "External_Risk_Factors_After": sum(row.get("External_Risk_Factors_After", 0) for row in summary_rows),
+            "EDR_Before": 0.0,
+            "EDR_After": 0.0,
+            "EDR_Delta": 0.0,
             "Build_Cohesion_Before": "",
             "Build_Cohesion_After": "",
             "Build_Modularity_Before": modularity_before,
@@ -911,6 +1117,14 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
             "Normalized_Change_Frequency_Before": "",
             "Normalized_Change_Frequency_After": "",
             "Observation_Window_Days": summary_rows[0].get("Observation_Window_Days", "") if summary_rows else "",
+            "Reliability_Issues_Before": total_reliability_issues_before,
+            "Reliability_Issues_After": total_reliability_issues_after,
+            "RE_Before": compute_reliability_score(total_reliability_issues_before, total_bloc_before),
+            "RE_After": compute_reliability_score(total_reliability_issues_after, total_bloc_after),
+            "RE_Delta": 0.0,
+            "RM_Before": 0.0,
+            "RM_After": 0.0,
+            "RM_Delta": 0.0,
             "Before_Smell_Count": total_before_smells,
             "After_Smell_Count": total_after_smells,
             "Before_Smell_Density": total_before_density,
@@ -932,6 +1146,30 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
             "Introduced_Security_Smells": 1 if total_after_security_smells > total_before_security_smells else 0,
             "Removed_Security_Smells": 1 if total_after_security_smells < total_before_security_smells else 0,
         }
+
+        totals_row["DSS_Delta"] = round(totals_row["DSS_After"] - totals_row["DSS_Before"], 4)
+        totals_row["BDS_Before"] = round(
+            max(
+                0.0,
+                1 - (
+                    totals_row["Non_Deterministic_Constructs_Before"]
+                    / max(totals_row["BLOC_Before"], 1)
+                ),
+            ),
+            4,
+        ) if totals_row["BLOC_Before"] > 0 else 0.0
+        totals_row["BDS_After"] = round(
+            max(
+                0.0,
+                1 - (
+                    totals_row["Non_Deterministic_Constructs_After"]
+                    / max(totals_row["BLOC_After"], 1)
+                ),
+            ),
+            4,
+        ) if totals_row["BLOC_After"] > 0 else 0.0
+        totals_row["BDS_Delta"] = round(totals_row["BDS_After"] - totals_row["BDS_Before"], 4)
+        totals_row["RE_Delta"] = round(totals_row["RE_After"] - totals_row["RE_Before"], 4)
 
         totals_row["NCP_Internal_Before"] = normalize_metric_by_bloc(
             totals_row["CP_Internal_Before"],
@@ -957,6 +1195,26 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
             totals_row["CP_External_After"] / max(totals_row["CP_Total_After"], 1),
             4,
         )
+        totals_row["EDR_Before"] = round(
+            totals_row["External_Risk_Factors_Before"] / max(totals_row["CP_Total_Before"], 1),
+            4,
+        )
+        totals_row["EDR_After"] = round(
+            totals_row["External_Risk_Factors_After"] / max(totals_row["CP_Total_After"], 1),
+            4,
+        )
+        totals_row["EDR_Delta"] = round(totals_row["EDR_After"] - totals_row["EDR_Before"], 4)
+        totals_row["RM_Before"] = compute_overall_reliability(
+            totals_row["RE_Before"],
+            totals_row["DSS_Before"],
+            totals_row["EDR_Before"],
+        )
+        totals_row["RM_After"] = compute_overall_reliability(
+            totals_row["RE_After"],
+            totals_row["DSS_After"],
+            totals_row["EDR_After"],
+        )
+        totals_row["RM_Delta"] = round(totals_row["RM_After"] - totals_row["RM_Before"], 4)
         totals_row["Normalized_CC_Before"] = normalize_metric_by_bloc(
             totals_row["Cyclomatic_Complexity_Before"],
             totals_row["BLOC_Before"],

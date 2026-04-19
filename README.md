@@ -32,6 +32,8 @@ Scope notes:
 | `Normalized_CC` | Size-normalized complexity: `Cyclomatic_Complexity / BLOC`. | Derived formula in the before/after pipeline. | Same formula after the Gradle/Kotlin CC value is computed. | Same formula after Maven build-logic complexity is computed. | Same formula after Ant build-logic complexity is computed. |
 | `Halstead_Volume` | Halstead volume computed as `V = (N1 + N2) * log2(n1 + n2)`. | Groovy AST helper for `.gradle` / `.groovy`; custom XML operator/operand counting for Maven and Ant. | `.gradle` / `.groovy`: uses a Groovy AST script to count operators and operands, then applies the Halstead formula.<br>`.gradle.kts`: not implemented in the current Halstead pipeline, so the value falls back to `0.0`. | Counts XML tag names as operators and child-tag occurrences as operands, then applies the Halstead formula. | Counts non-`project` / non-`description` XML tags as operators and attribute names as operands, then applies the Halstead formula. |
 | `Normalized_HV` | Size-normalized Halstead volume: `Halstead_Volume / BLOC`. | Derived formula in the before/after pipeline. | Same formula after the Gradle/Groovy or Kotlin DSL Halstead value is computed. | Same formula after Maven Halstead volume is computed. | Same formula after Ant Halstead volume is computed. |
+| `DSS` | Dependency Stability Score computed as the proportion of dependencies resolved to fixed versions. | Derived formula in [`metrics/dependency_stability.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/dependency_stability.py). | Uses the Gradle parser plus property resolution heuristics and classifies versions as fixed, dynamic, snapshot, or unknown. | Uses XML dependency traversal, property resolution, and dependencyManagement fallback before classifying versions. | Uses parsed or resolved JAR references in Ant attributes and classifies extracted versions. |
+| `BDS` | Build Script Determinism Score computed as one minus the density of non-deterministic constructs in the build file. | Derived formula in [`metrics/build_determinism.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/build_determinism.py). | Scans Gradle/Groovy/Kotlin DSL content for time-based APIs, randomness APIs, and explicit mutable fetch steps. | Scans Maven XML content for the same non-deterministic construct families, including timestamp properties and mutable fetch commands. | Scans Ant XML content for the same non-deterministic construct families, including `<get>`-based fetch steps. |
 | `Comment_Ratio` | Ratio of comment lines to total lines. | `scc` line statistics. | Uses `scc` line stats and computes `comment / lines` for Gradle/Groovy/Kotlin files. | Uses `scc` line stats and computes `comment / lines`. | Uses `scc` line stats and computes `comment / lines`. |
 | `Comment_Readability` | Flesch Reading Ease score of extracted comment text. | Regex-based comment extraction plus Flesch heuristic. | Extracts `// ...` and `/* ... */` comments, normalizes the text, counts sentences/words/syllables, then computes Flesch Reading Ease. | Extracts `<!-- ... -->` comments, normalizes the text, then computes Flesch Reading Ease. | Extracts `<!-- ... -->` comments, normalizes the text, then computes Flesch Reading Ease. |
 | `Style_Conformance_Score` | Style score in the range `0..100`, computed as `max(0, 100 - ((violations / BLOC) * 100))`. | `CodeNarc` for Groovy Gradle style, `detekt` for Kotlin DSL style, custom XML style rules for Maven and Ant. | `.gradle` / `.groovy`: CodeNarc weighted violations, where `weighted_violations = 5*P1 + 3*P2 + P3`.<br>`.gradle.kts`: detekt XML report error count used as the violation total. | Custom XML checks: indentation, line length, Maven-style tag names, and lowercase attribute names. | Custom XML checks: indentation, line length, lowercase tag/attribute names, and target-name format. |
@@ -42,6 +44,7 @@ Scope notes:
 | `NCP_Internal` | Size-normalized internal coupling: `CP_Internal / BLOC`. | Derived formula in the coupling analyzer / before-after pipeline. | Same normalization formula. | Same normalization formula. | Same normalization formula. |
 | `NCP_External` | Size-normalized external coupling: `CP_External / BLOC`. | Derived formula in the coupling analyzer / before-after pipeline. | Same normalization formula. | Same normalization formula. | Same normalization formula. |
 | `Coupling_Ratio` | Share of coupling that is external: `CP_External / CP_Total`. | Derived formula in the coupling analyzer / before-after pipeline. | Same ratio after the Gradle coupling components are computed. | Same ratio after the Maven coupling components are computed. | Same ratio after the Ant coupling components are computed. |
+| `EDR` | External Dependency Risk, computed as the share of total coupling attributable to external-system-facing factors. | Derived from coupling components in [`metrics/external_dependency_risk.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/external_dependency_risk.py). | Uses `D + P + R + E + U` over `CP_Total`, excluding local module links from the numerator. | Uses the same component-based formula over Maven coupling results. | Uses the same component-based formula over Ant coupling results. |
 | `Build_Cohesion` | Average pairwise Jaccard similarity across extracted build-element feature sets. | Groovy AST helper when available; otherwise regex/XML feature extraction plus heuristic Jaccard overlap. | Compares task feature sets. `.gradle` / `.groovy` use an AST-based task extractor when available, otherwise regex fallback; `.gradle.kts` uses the regex fallback. Features include shared keywords, properties, dependency references, source sets, I/O config, and scripts. | Compares plugin execution feature sets built from plugin artifact IDs, execution goals, and configuration tags. | Compares target feature sets built from `depends`, `if` / `unless`, task tags, and attribute names. |
 | `Churn` | Raw code churn in the observation window: sum of file additions and deletions across matching commits. | GitHub commit-history queries plus per-commit file stats. | Build-system agnostic. Uses GitHub commit history for the file over the configured rolling window. | Same history-based calculation. | Same history-based calculation. |
 | `Change_Frequency` | Number of commits touching the file in the observation window. | GitHub commit-history queries. | Build-system agnostic. Counts commits returned by the file-history query. | Same history-based calculation. | Same history-based calculation. |
@@ -54,6 +57,9 @@ Scope notes:
 | `Security_Smell_Count` | Number of security smell findings returned by the shared security extractor. | `tools/secure_linter` parser + build-system-specific security heuristic checks. | Runs Gradle-specific checks for hardcoded credentials, signing credentials, insecure URLs, wildcard usage/version ranges, and hardcoded paths/URLs. | Runs Maven-specific checks for hardcoded credentials, insecure URLs, wildcard version ranges, and hardcoded paths/URLs. | Runs Ant-specific checks for hardcoded credentials, insecure URLs, wildcard usage, and hardcoded paths/URLs. |
 | `Security_Smell_Density` | Density of security smells: `(smell_count / non_empty_lines) * 1000`. | Derived formula in the shared security smell extractor. | Same shared extractor formula. | Same shared extractor formula. | Same shared extractor formula. |
 | `Security_Smell_Summary` | Semicolon-separated set of security smell IDs present in the file. | Derived formatting in the shared security smell extractor. | Same shared extractor formatting. | Same shared extractor formatting. | Same shared extractor formatting. |
+| `Reliability_Issues` | Total count of unweighted reliability findings: insecure URLs, hardcoded paths/URLs, hardcoded credentials, deprecated dependencies, outdated dependencies, and wildcard usage. | Derived from the maintainability and security smell results in the before/after pipeline. | Same count-based formula across supported build systems. | Same count-based formula across supported build systems. | Same count-based formula across supported build systems. |
+| `RE` | Reliability score computed as `max(0, 1 - (Reliability_Issues / BLOC))`. | Derived formula in the before/after pipeline using the existing `BLOC` metric. | Same formula after Gradle smells are extracted. | Same formula after Maven smells are extracted. | Same formula after Ant smells are extracted. |
+| `RM` | Overall reliability metric computed as the unweighted average of issue-based reliability, dependency stability, and inverse external dependency risk. | Derived formula in [`metrics/reliability_metric.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/reliability_metric.py). | Uses `RE`, `DSS`, and `1 - EDR` after the Gradle metrics are computed. | Uses the same composite formula after Maven metrics are computed. | Uses the same composite formula after Ant metrics are computed. |
 
 ## 1. Complexity
 
@@ -236,7 +242,44 @@ In practice, the pipeline is:
 ---
 ## 2. Dependency Quality
 
-A weighted formula:
+This repo now computes a **Dependency Stability Score (`DSS`)** for Gradle, Maven, and Ant build files.
+
+The score is:
+
+```text
+DSS = Fixed_Version_Dependencies / Total_Dependencies
+```
+
+Where:
+- `Fixed_Version_Dependencies` = number of dependencies whose version resolves to a fixed release
+- `Total_Dependencies` = total number of detected dependencies considered by the parser
+
+Version classification in the current implementation:
+- `fixed`: explicit pinned release versions such as `1.2.3`
+- `dynamic`: version ranges or floating versions such as `1.+`, `[1.0,2.0)`, `latest.release`
+- `snapshot`: snapshot-style versions such as `1.2.3-SNAPSHOT`
+- `unknown`: dependencies whose version cannot be resolved to a concrete version from the file contents
+
+Interpretation:
+- a higher `DSS` means a larger share of dependencies are pinned to fixed versions
+- a lower `DSS` means the build relies more on dynamic, snapshot, or unresolved dependency declarations
+- if no dependencies are detected for a file, the implementation returns `DSS = 0.0`
+
+Current implementation notes:
+- Gradle uses [`tools/secure_linter/gradle_parser.py`](/Users/aghammam/Desktop/BuildRefMiner/tools/secure_linter/gradle_parser.py) plus local property-resolution heuristics in [`metrics/dependency_stability.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/dependency_stability.py)
+- Maven uses XML traversal and resolves versions from local `<properties>` and `<dependencyManagement>` when available
+- Ant uses parsed/resolved JAR references in XML attribute values and extracts versions from JAR file names when possible
+
+The before/after pipeline exports:
+- `Dependency_Count_Before` and `Dependency_Count_After`
+- `Fixed_Dependency_Count_Before` and `Fixed_Dependency_Count_After`
+- `Dynamic_Dependency_Count_Before` and `Dynamic_Dependency_Count_After`
+- `Snapshot_Dependency_Count_Before` and `Snapshot_Dependency_Count_After`
+- `Unknown_Dependency_Count_Before` and `Unknown_Dependency_Count_After`
+- `DSS_Before` and `DSS_After`
+- `DSS_Delta`
+
+Conceptual note retained from the original README:
 
 ```
  w₁ * (1 - UDR) + w₂ * (1 - DCR)
@@ -246,6 +289,35 @@ A weighted formula:
 - `UDR` = Unused Dependency Ratio  
 - `DCR` = Dependency Conflict Ratio
 ---
+
+### Build Script Determinism
+
+This repo also computes a **Build Script Determinism Score (`BDS`)** for Gradle, Maven, and Ant build files.
+
+The score is:
+
+```text
+BDS = max(0, 1 - (NDC / BLOC))
+```
+
+Where:
+- `NDC` = number of detected non-deterministic constructs
+- `BLOC` = build lines of code
+
+The current implementation treats the following as non-deterministic construct families:
+- `TIME`: time-based values such as `System.currentTimeMillis()`, `Instant.now()`, `new Date()`, or Maven build timestamps
+- `RANDOMNESS`: randomness sources such as `Math.random()`, `new Random()`, `SecureRandom`, or `UUID.randomUUID()`
+- `NON_REPRODUCIBLE_STEP`: explicit mutable fetch or checkout steps such as `curl`, `wget`, `Invoke-WebRequest`, `git clone`, `svn checkout`, or Ant `<get>`
+
+Interpretation:
+- a higher `BDS` means the build file contains fewer non-deterministic constructs per build line
+- a lower `BDS` means the build file is more likely to produce variable behavior across executions
+
+The before/after pipeline exports:
+- `Non_Deterministic_Constructs_Before` and `Non_Deterministic_Constructs_After`
+- `Non_Deterministic_Summary_Before` and `Non_Deterministic_Summary_After`
+- `BDS_Before` and `BDS_After`
+- `BDS_Delta`
 
 ## 3. Maintainability
 
@@ -354,6 +426,61 @@ The summary CSV includes:
 - `Security_Smell_Count_Delta` and `Security_Smell_Density_Delta`
 - one-hot security smell columns such as `Before_HARDCODED_CREDENTIALS` and `After_WILDCARD_USAGE`
 
+### Reliability Metric
+
+The before/after pipeline also exports an unweighted reliability metric based on the issue types you selected.
+
+The current implementation keeps two related reliability scores:
+- `RE`: issue-based reliability derived only from reliability issues and `BLOC`
+- `RM`: overall reliability derived from issue-based reliability, dependency stability, and external dependency risk
+
+The current implementation defines:
+
+```text
+RI = HARDCODED_CREDENTIALS
+   + INSECURE_URLS
+   + WILDCARD_USAGE
+   + HARDCODED_PATHS_AND_URLS
+   + DEPRECATED_DEPENDENCIES
+   + OUTDATED_DEPENDENCIES
+```
+
+where each term is the number of detected findings for that smell category in the snapshot, not just a binary presence flag.
+
+The reliability score is:
+
+```text
+RE = max(0, 1 - (RI / BLOC))
+```
+
+Where:
+- `RI` = total reliability issue count
+- `BLOC` = build lines of code for the snapshot
+
+The overall reliability metric is:
+
+```text
+RM = (RE + DSS + (1 - EDR)) / 3
+```
+
+Where:
+- `RE` = issue-based reliability
+- `DSS` = Dependency Stability Score
+- `EDR` = External Dependency Risk
+
+Interpretation:
+- higher `RE` means fewer detected reliability issues per build line
+- higher `DSS` means a larger share of dependencies are fixed-version dependencies
+- lower `EDR` means less reliance on external systems
+- higher `RM` therefore indicates a more reliable build file overall
+
+The summary CSV includes:
+- `Reliability_Issues_Before` and `Reliability_Issues_After`
+- `RE_Before` and `RE_After`
+- `RE_Delta`
+- `RM_Before` and `RM_After`
+- `RM_Delta`
+
 ---
 
 ## 4. Coupling and Cohesion Metrics
@@ -413,6 +540,34 @@ Interpretation:
 - a higher `CP_internal` means stronger internal interdependence inside the same file
 - a higher `CP_external` means the build file relies more on external modules, tools, repositories, or environment-specific resources
 - a higher `CouplingRatio` means coupling is driven more by external factors than by internal structure
+
+The before/after pipeline also exports an **External Dependency Risk (`EDR`)** score that focuses specifically on reliance on external systems.
+
+Methodology paragraph:
+
+External Dependency Risk (`EDR`) measures the extent to which a build file relies on external systems rather than internal project structure. In this work, external systems include external dependency declarations, plugin references, remote repositories, external script or command execution hooks, and environment, path, or URL based external resource references. The metric is derived from the build coupling model and is normalized by total coupling so that files of different sizes and structures remain comparable. Local module links are intentionally excluded from the risk numerator because they represent internal project modularity rather than reliance on outside infrastructure or services.
+
+The current implementation defines:
+
+```math
+EDR(b) = \frac{D + P + R + E + U}{CP(b)}
+```
+
+Where:
+- `D` = external dependency declarations
+- `P` = plugin references
+- `R` = remote repositories
+- `E` = external scripts or command execution hooks
+- `U` = environment, absolute-path, and URL-based external resource references
+- `CP(b)` = total coupling for build file `b`
+
+Implementation note:
+- local module links `M` are excluded from the `EDR` numerator because they represent project-internal structure, not external-system reliance
+
+The summary CSV includes:
+- `External_Risk_Factors_Before` and `External_Risk_Factors_After`
+- `EDR_Before` and `EDR_After`
+- `EDR_Delta`
 
 ### 4.2 Gradle Coupling Calculation
 
