@@ -61,10 +61,12 @@ Several quality attributes reuse the same base quantities.
 | Complexity | `BLOC`, `Cyclomatic_Complexity`, `Normalized_CC`, `Halstead_Volume`, `Normalized_HV` | none |
 | Dependency Quality | `Dependency_Count`, `Fixed_Dependency_Count`, `Dynamic_Dependency_Count`, `Snapshot_Dependency_Count`, `Unknown_Dependency_Count` | `DSS` |
 | Determinism and Reproducibility | `Non_Deterministic_Constructs`, `Non_Deterministic_Summary` | `BDS` |
+| Understandability | `Style_Conformance_Score`, `Comment_Ratio`, `Comment_Readability`, `Normalized_CC`, `Normalized_HV` | methodology-level `US` |
 | Maintainability | `Style_Conformance_Score`, `Comment_Ratio`, `Comment_Readability`, `Clone_Density`, `Maintainability_Smell_Count`, `Maintainability_Smell_Density`, `Maintainability_Smell_Summary` | none |
 | Coupling and Cohesion | `CP_Internal`, `CP_External`, `CP_Total`, `NCP_Internal`, `NCP_External`, `Coupling_Ratio`, `Build_Cohesion` | `EDR` reuses coupling components |
+| Modularity | `Build_Cohesion`, `Coupling_Ratio`, `NCP_External` | methodology-level `MS` |
 | Evolution and Change Activity | `Churn`, `Change_Frequency`, `Avg_Logical_LOC`, `Normalized_Churn`, `Normalized_Change_Frequency` | none |
-| Security | `Security_Smell_Count`, `Security_Smell_Density`, `Security_Smell_Summary` | none |
+| Security | `Security_Smell_Count`, `Security_Smell_Density`, `Security_Smell_Summary` | methodology-level `SS` |
 | Reliability | `Reliability_Issues` | `RE`, `RM` |
 
 ## 3. Complexity
@@ -208,7 +210,35 @@ The current detector is text-based and scans the file contents for the construct
 
 Maintainability captures how easy a build script is to read, diagnose, update, and evolve.
 
-No single aggregate maintainability score is currently emitted. Instead, the attribute is characterized through the low-level metrics below.
+No single aggregate maintainability score is currently emitted by the pipeline. However, the attribute can be operationalized from the low-level metrics below.
+
+### 6.0 Attribute-Level Formula
+
+A maintainability score can be expressed as:
+
+```text
+Maintainability(b) =
+(
+  1 / (1 + Normalized_CC(b))
+  + 1 / (1 + Normalized_HV(b))
+  + SCS(b) / 100
+  + CR(b)
+  + clamp(FRE(b), 0, 100) / 100
+  + (1 - Clone_Density(b))
+  + 1 / (1 + MSD(b) / 1000)
+) / 7
+```
+
+Where:
+- `SCS(b)` = `Style_Conformance_Score`
+- `CR(b)` = `Comment_Ratio`
+- `FRE(b)` = `Comment_Readability`
+- `MSD(b)` = `Maintainability_Smell_Density`
+
+This formulation keeps all components in the `0..1` range before averaging:
+- lower complexity and lower volume increase maintainability through `1 / (1 + x)`
+- higher style conformance, richer documentation, and better readability increase maintainability
+- higher duplication and higher smell density reduce maintainability
 
 ### 6.1 Documentation and Style Metrics
 
@@ -272,6 +302,31 @@ Tracked maintainability smell categories:
 - Maven and Ant files are analyzed with PMD CPD in XML mode when available.
 - A repeated-line-window fallback is used when the preferred duplication path is unavailable.
 
+### 6.5 Understandability Formula
+
+Understandability is not exported as a standalone pipeline field, but it can be operationalized from the documentation, style, and complexity measures already computed:
+
+```text
+US(b) =
+(
+  SCS(b) / 100
+  + CR(b)
+  + clamp(FRE(b), 0, 100) / 100
+  + 1 / (1 + Normalized_CC(b))
+  + 1 / (1 + Normalized_HV(b))
+) / 5
+```
+
+Where:
+- `US(b)` = understandability score
+- `SCS(b)` = `Style_Conformance_Score`
+- `CR(b)` = `Comment_Ratio`
+- `FRE(b)` = `Comment_Readability`
+
+Interpretation:
+- higher style conformance, clearer comments, and lower structural complexity increase understandability
+- higher normalized complexity and higher normalized Halstead volume reduce understandability
+
 ## 7. Coupling and Cohesion
 
 Coupling and cohesion describe the extent to which build logic is externally connected and internally related.
@@ -309,6 +364,28 @@ The elements compared depend on the build system:
 - Maven: plugin execution feature sets
 - Ant: target feature sets
 
+### 7.3 Modularity Formula
+
+Modularity is not currently exported as a standalone implemented pipeline field in this workspace, but it can be operationalized from cohesion and coupling as:
+
+```text
+MS(b) =
+(
+  Build_Cohesion(b)
+  + (1 - Coupling_Ratio(b))
+  + 1 / (1 + NCP_External(b))
+) / 3
+```
+
+Where:
+- `MS(b)` = modularity score
+- `Build_Cohesion(b)` rewards stronger internal relatedness of build elements
+- `1 - Coupling_Ratio(b)` rewards a lower proportion of external coupling
+- `1 / (1 + NCP_External(b))` rewards lower size-normalized external coupling
+
+Interpretation:
+- higher cohesion and lower external coupling indicate stronger modularity
+
 ## 8. Evolution and Change Activity
 
 Evolution metrics characterize how frequently a build file changes and how much code churn it experiences over time.
@@ -328,6 +405,28 @@ The current before/after pipeline uses a rolling observation window ending at th
 ## 9. Security
 
 Security is characterized through smell-based indicators rather than a single aggregate security score.
+
+### 9.0 Attribute-Level Formula
+
+A security score can be operationalized directly from the security smell density:
+
+```text
+SS(b) = max(0, 1 - (Security_Smell_Count(b) / max(NonEmptyLines(b), 1)))
+```
+
+Equivalently, using the documented density metric:
+
+```text
+SS(b) = max(0, 1 - (Security_Smell_Density(b) / 1000))
+```
+
+Where:
+- `SS(b)` = security score
+- `Security_Smell_Count(b)` counts security smell findings
+- `Security_Smell_Density(b)` normalizes those findings per 1000 non-empty lines
+
+Interpretation:
+- more security smells imply lower security
 
 ### 9.1 Security Smell Metrics
 
@@ -371,7 +470,20 @@ Where:
 - lower `EDR` means less reliance on external systems
 - higher `RM` therefore indicates a more reliable build file overall
 
-### 10.3 External Dependency Risk Details
+### 10.3 Attribute-Level Formula
+
+The overall reliability metric used in this project is:
+
+```text
+RM(b) = (RE(b) + DSS(b) + (1 - EDR(b))) / 3
+```
+
+This combines:
+- issue-based reliability through `RE`
+- dependency stability through `DSS`
+- reduced external-system exposure through `1 - EDR`
+
+### 10.4 External Dependency Risk Details
 
 `EDR` is derived from the coupling model:
 
@@ -381,7 +493,7 @@ EDR(b) = (D + P + R + E + U) / CP_Total(b)
 
 Local module links `M` are intentionally excluded from the `EDR` numerator because they represent project-internal structure rather than reliance on external systems.
 
-### 10.4 Composite Reliability Scope
+### 10.5 Composite Reliability Scope
 
 The current implementation keeps two reliability views:
 - `RE`: issue-based reliability derived only from reliability issues and `BLOC`
