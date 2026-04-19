@@ -1,983 +1,390 @@
+# Build Quality Attributes and Metrics for Gradle, Maven, and Ant
 
-# Build Metrics (Gradle, Maven, Ant)
+This document describes the quality attributes currently measured for build scripts in this project and the low-level metrics used to characterize each attribute.
+
+The README is intentionally methodology-first:
+- it documents only metrics that are currently computed by the pipeline
+- it groups metrics by quality attribute rather than by implementation script
+- it focuses on metric definitions, formulas, and build-system-specific calculation rules
+
+Supported build systems:
+- Gradle Groovy DSL: `.gradle` and `.groovy`
+- Gradle Kotlin DSL: `.gradle.kts`
+- Maven: `pom.xml`
+- Ant: `build.xml`
 
 ## Contents
 
-- [0. Implemented Metrics Overview](#0-implemented-metrics-overview)
-- [1. Complexity](#1-complexity)
-- [2. Dependency Quality](#2-dependency-quality)
-- [3. Maintainability](#3-maintainability)
-- [Maintainability Smells](#maintainability-smells)
-- [Security Smells](#security-smells)
-- [4. Coupling and Cohesion Metrics](#4-coupling-and-cohesion-metrics)
-- [5. Cohesion Notes](#5-cohesion-notes)
-- [6. Code Duplication](#6-code-duplication)
-- [7. Security Metric](#7-security-metric)
-- [8. Build Run Time (BRT) Metric](#8-build-run-time-brt-metric)
-- [9. Halstead Complexity Metric: Operator and Operand Definitions for Build Systems](#9-halstead-complexity-metric-operator-and-operand-definitions-for-build-systems)
+- [1. Scope and Conventions](#1-scope-and-conventions)
+- [2. Quality Attribute Overview](#2-quality-attribute-overview)
+- [3. Complexity](#3-complexity)
+- [4. Dependency Quality](#4-dependency-quality)
+- [5. Determinism and Reproducibility](#5-determinism-and-reproducibility)
+- [6. Maintainability](#6-maintainability)
+- [7. Coupling and Cohesion](#7-coupling-and-cohesion)
+- [8. Evolution and Change Activity](#8-evolution-and-change-activity)
+- [9. Security](#9-security)
+- [10. Reliability](#10-reliability)
 
-## 0. Implemented Metrics Overview
+## 1. Scope and Conventions
 
-The table below summarizes the metrics that are **verifiably implemented in the current codebase** and explains how each one is calculated for the supported build systems.
+### 1.1 Output Convention
 
-Scope notes:
-- The overview covers metrics implemented in [`metrics/`](/Users/aghammam/Desktop/BuildRefMiner/metrics), the before/after pipeline in [`metrics/run_before_after_metrics.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/run_before_after_metrics.py), and the smell extractors in [`tools/secure_linter/`](/Users/aghammam/Desktop/BuildRefMiner/tools/secure_linter).
-- `Build_Modularity_*` is referenced by the before/after pipeline, but its implementation source is not present in the current workspace, so it is intentionally excluded from the table below.
-- The conceptual sections later in this README for items such as the proposed security metric and build run time are documentation notes, not part of this implementation summary.
+The before/after pipeline reports most metrics with paired fields:
+- `*_Before`
+- `*_After`
+- `*_Delta` when a direct delta is meaningful
 
-| Metric | Definition | Tool / Technique | Gradle / Groovy / Kotlin DSL | Maven (`pom.xml`) | Ant (`build.xml`) |
-|--------|------------|------------------|------------------------------|-------------------|-------------------|
-| `BLOC` | Build lines of code. | `scc` JSON output. | Uses `scc --by-file --format json` and takes the `Code` count for `.gradle`, `.groovy`, and `.gradle.kts` files. | Uses `scc` and takes the XML file's `Code` count. | Uses `scc` and takes the XML file's `Code` count. |
-| `Cyclomatic_Complexity` | File-level decision/build-logic complexity. | `CodeNarc` for Groovy Gradle, `detekt` for Kotlin DSL, custom XML structural heuristics for Maven and Ant. | `.gradle` / `.groovy`: runs CodeNarc and sums reported `CyclomaticComplexity` values.<br>`.gradle.kts`: runs detekt with `CyclomaticComplexMethod` threshold forced to `0`, then sums reported complexities. | Starts at `1`, then adds `1` for each `<profile>`, `<activation>`, and `<execution>` tag. | Starts at `1`, then adds `1` for each condition-related tag (`condition`, `available`, `uptodate`, `isset`, `equals`, `contains`, `matches`, `and`, `or`, `not`), each `if` / `unless` attribute, and extra target dependencies beyond the first. |
-| `Normalized_CC` | Size-normalized complexity: `Cyclomatic_Complexity / BLOC`. | Derived formula in the before/after pipeline. | Same formula after the Gradle/Kotlin CC value is computed. | Same formula after Maven build-logic complexity is computed. | Same formula after Ant build-logic complexity is computed. |
-| `Halstead_Volume` | Halstead volume computed as `V = (N1 + N2) * log2(n1 + n2)`. | Groovy AST helper for `.gradle` / `.groovy`; custom XML operator/operand counting for Maven and Ant. | `.gradle` / `.groovy`: uses a Groovy AST script to count operators and operands, then applies the Halstead formula.<br>`.gradle.kts`: not implemented in the current Halstead pipeline, so the value falls back to `0.0`. | Counts XML tag names as operators and child-tag occurrences as operands, then applies the Halstead formula. | Counts non-`project` / non-`description` XML tags as operators and attribute names as operands, then applies the Halstead formula. |
-| `Normalized_HV` | Size-normalized Halstead volume: `Halstead_Volume / BLOC`. | Derived formula in the before/after pipeline. | Same formula after the Gradle/Groovy or Kotlin DSL Halstead value is computed. | Same formula after Maven Halstead volume is computed. | Same formula after Ant Halstead volume is computed. |
-| `DSS` | Dependency Stability Score computed as the proportion of dependencies resolved to fixed versions. | Derived formula in [`metrics/dependency_stability.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/dependency_stability.py). | Uses the Gradle parser plus property resolution heuristics and classifies versions as fixed, dynamic, snapshot, or unknown. | Uses XML dependency traversal, property resolution, and dependencyManagement fallback before classifying versions. | Uses parsed or resolved JAR references in Ant attributes and classifies extracted versions. |
-| `BDS` | Build Script Determinism Score computed as one minus the density of non-deterministic constructs in the build file. | Derived formula in [`metrics/build_determinism.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/build_determinism.py). | Scans Gradle/Groovy/Kotlin DSL content for time-based APIs, randomness APIs, and explicit mutable fetch steps. | Scans Maven XML content for the same non-deterministic construct families, including timestamp properties and mutable fetch commands. | Scans Ant XML content for the same non-deterministic construct families, including `<get>`-based fetch steps. |
-| `Comment_Ratio` | Ratio of comment lines to total lines. | `scc` line statistics. | Uses `scc` line stats and computes `comment / lines` for Gradle/Groovy/Kotlin files. | Uses `scc` line stats and computes `comment / lines`. | Uses `scc` line stats and computes `comment / lines`. |
-| `Comment_Readability` | Flesch Reading Ease score of extracted comment text. | Regex-based comment extraction plus Flesch heuristic. | Extracts `// ...` and `/* ... */` comments, normalizes the text, counts sentences/words/syllables, then computes Flesch Reading Ease. | Extracts `<!-- ... -->` comments, normalizes the text, then computes Flesch Reading Ease. | Extracts `<!-- ... -->` comments, normalizes the text, then computes Flesch Reading Ease. |
-| `Style_Conformance_Score` | Style score in the range `0..100`, computed as `max(0, 100 - ((violations / BLOC) * 100))`. | `CodeNarc` for Groovy Gradle style, `detekt` for Kotlin DSL style, custom XML style rules for Maven and Ant. | `.gradle` / `.groovy`: CodeNarc weighted violations, where `weighted_violations = 5*P1 + 3*P2 + P3`.<br>`.gradle.kts`: detekt XML report error count used as the violation total. | Custom XML checks: indentation, line length, Maven-style tag names, and lowercase attribute names. | Custom XML checks: indentation, line length, lowercase tag/attribute names, and target-name format. |
-| `Clone_Density` | Fraction of duplicated logic lines in the file. | PMD CPD when available; fallback repeated-line-window heuristic. | Preferred path: PMD CPD on Groovy or Kotlin syntax and `cloned_lines / BLOC`.<br>Fallback: repeated normalized intra-file line windows after comment removal. | Preferred path: PMD CPD on XML and `cloned_lines / BLOC`.<br>Fallback: repeated normalized intra-file line windows after comment removal. | Preferred path: PMD CPD on XML and `cloned_lines / BLOC`.<br>Fallback: repeated normalized intra-file line windows after comment removal. |
-| `CP_Internal` | Internal coupling count. | Groovy AST helper or regex heuristics for Gradle; custom XML parsing and heuristic rules for Maven and Ant. | `T_int + V_shared + C_internal`, where internal task links, shared properties, and shared config references are detected from the Gradle AST helper or regex fallback. | `T_int + V_shared + C_internal`, where linked plugin executions, reused property references, and repeated configuration tags are counted. | `T_int + V_shared + C_internal`, where target dependencies / `antcall` links, shared property references, and repeated IDs / refs / path-like configs are counted. |
-| `CP_External` | External coupling count. | Groovy AST helper or regex heuristics for Gradle; custom XML parsing and heuristic rules for Maven and Ant. | `M + D + P + R + E + U`, where the analyzer counts project-module references, external dependencies, plugins, repositories, external commands/scripts, and env/path/URL resources. | `M + D + P + R + E + U`, where the analyzer counts local modules, non-local dependencies, plugins, repositories, exec/antrun plugins, and env/path/URL resources. | `M + D + P + R + E + U`, where the analyzer counts imported/sub-build modules, JAR dependencies, taskdefs, remote resources, exec/java tasks, and env/path/URL resources. |
-| `CP_Total` | Total coupling: `CP_Internal + CP_External`. | Derived from coupling components in the coupling analyzer. | Sum of internal and external Gradle coupling components. | Sum of internal and external Maven coupling components. | Sum of internal and external Ant coupling components. |
-| `NCP_Internal` | Size-normalized internal coupling: `CP_Internal / BLOC`. | Derived formula in the coupling analyzer / before-after pipeline. | Same normalization formula. | Same normalization formula. | Same normalization formula. |
-| `NCP_External` | Size-normalized external coupling: `CP_External / BLOC`. | Derived formula in the coupling analyzer / before-after pipeline. | Same normalization formula. | Same normalization formula. | Same normalization formula. |
-| `Coupling_Ratio` | Share of coupling that is external: `CP_External / CP_Total`. | Derived formula in the coupling analyzer / before-after pipeline. | Same ratio after the Gradle coupling components are computed. | Same ratio after the Maven coupling components are computed. | Same ratio after the Ant coupling components are computed. |
-| `EDR` | External Dependency Risk, computed as the share of total coupling attributable to external-system-facing factors. | Derived from coupling components in [`metrics/external_dependency_risk.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/external_dependency_risk.py). | Uses `D + P + R + E + U` over `CP_Total`, excluding local module links from the numerator. | Uses the same component-based formula over Maven coupling results. | Uses the same component-based formula over Ant coupling results. |
-| `Build_Cohesion` | Average pairwise Jaccard similarity across extracted build-element feature sets. | Groovy AST helper when available; otherwise regex/XML feature extraction plus heuristic Jaccard overlap. | Compares task feature sets. `.gradle` / `.groovy` use an AST-based task extractor when available, otherwise regex fallback; `.gradle.kts` uses the regex fallback. Features include shared keywords, properties, dependency references, source sets, I/O config, and scripts. | Compares plugin execution feature sets built from plugin artifact IDs, execution goals, and configuration tags. | Compares target feature sets built from `depends`, `if` / `unless`, task tags, and attribute names. |
-| `Churn` | Raw code churn in the observation window: sum of file additions and deletions across matching commits. | GitHub commit-history queries plus per-commit file stats. | Build-system agnostic. Uses GitHub commit history for the file over the configured rolling window. | Same history-based calculation. | Same history-based calculation. |
-| `Change_Frequency` | Number of commits touching the file in the observation window. | GitHub commit-history queries. | Build-system agnostic. Counts commits returned by the file-history query. | Same history-based calculation. | Same history-based calculation. |
-| `Avg_Logical_LOC` | Average logical LOC of the file across commits in the observation window. | GitHub snapshot materialization plus `BLOC` recomputation with `scc`. | Materializes historical file contents, computes `BLOC` for each snapshot, then averages them. | Same history-based calculation. | Same history-based calculation. |
-| `Normalized_Churn` | Size-normalized churn: `Churn / Avg_Logical_LOC`. | Derived formula in the change-activity pipeline. | Same normalization formula. | Same normalization formula. | Same normalization formula. |
-| `Normalized_Change_Frequency` | Size-normalized volatility: `(Change_Frequency / Avg_Logical_LOC) * 100`. | Derived formula in the change-activity pipeline. | Same normalization formula. | Same normalization formula. | Same normalization formula. |
-| `Maintainability_Smell_Count` | Number of maintainability smell findings returned by the shared smell extractor. | `tools/secure_linter` parser + build-system-specific heuristic smell checks. | Runs the Gradle parser plus Gradle-specific checks for complexity, duplicate code/dependencies, inconsistent version management, missing versions, error handling, suspicious comments, deprecated dependencies, and outdated dependencies. | Runs the Maven parser plus Maven-specific checks for complexity heuristics, duplicates, empty tags, inconsistent management, missing versions, error handling, suspicious comments, deprecated dependencies, and outdated dependencies. | Runs the Ant parser plus Ant-specific checks for complexity, duplicates, empty/incomplete tags, inconsistent dependency management, missing versions, error handling, suspicious comments, deprecated dependencies, and outdated dependencies. |
-| `Maintainability_Smell_Density` | Density of maintainability smells: `(smell_count / non_empty_lines) * 1000`. | Derived formula in the shared maintainability smell extractor. | Same shared extractor formula. | Same shared extractor formula. | Same shared extractor formula. |
-| `Maintainability_Smell_Summary` | Semicolon-separated set of maintainability smell IDs present in the file. | Derived formatting in the shared maintainability smell extractor. | Same shared extractor formatting. | Same shared extractor formatting. | Same shared extractor formatting. |
-| `Security_Smell_Count` | Number of security smell findings returned by the shared security extractor. | `tools/secure_linter` parser + build-system-specific security heuristic checks. | Runs Gradle-specific checks for hardcoded credentials, signing credentials, insecure URLs, wildcard usage/version ranges, and hardcoded paths/URLs. | Runs Maven-specific checks for hardcoded credentials, insecure URLs, wildcard version ranges, and hardcoded paths/URLs. | Runs Ant-specific checks for hardcoded credentials, insecure URLs, wildcard usage, and hardcoded paths/URLs. |
-| `Security_Smell_Density` | Density of security smells: `(smell_count / non_empty_lines) * 1000`. | Derived formula in the shared security smell extractor. | Same shared extractor formula. | Same shared extractor formula. | Same shared extractor formula. |
-| `Security_Smell_Summary` | Semicolon-separated set of security smell IDs present in the file. | Derived formatting in the shared security smell extractor. | Same shared extractor formatting. | Same shared extractor formatting. | Same shared extractor formatting. |
-| `Reliability_Issues` | Total count of unweighted reliability findings: insecure URLs, hardcoded paths/URLs, hardcoded credentials, deprecated dependencies, outdated dependencies, and wildcard usage. | Derived from the maintainability and security smell results in the before/after pipeline. | Same count-based formula across supported build systems. | Same count-based formula across supported build systems. | Same count-based formula across supported build systems. |
-| `RE` | Reliability score computed as `max(0, 1 - (Reliability_Issues / BLOC))`. | Derived formula in the before/after pipeline using the existing `BLOC` metric. | Same formula after Gradle smells are extracted. | Same formula after Maven smells are extracted. | Same formula after Ant smells are extracted. |
-| `RM` | Overall reliability metric computed as the unweighted average of issue-based reliability, dependency stability, and inverse external dependency risk. | Derived formula in [`metrics/reliability_metric.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/reliability_metric.py). | Uses `RE`, `DSS`, and `1 - EDR` after the Gradle metrics are computed. | Uses the same composite formula after Maven metrics are computed. | Uses the same composite formula after Ant metrics are computed. |
+The formulas below are written for a single build file `b`. The pipeline applies the same definitions to both snapshots.
 
-## 1. Complexity
+### 1.2 Common Base Measures
 
-A weighted formula:
+Several quality attributes reuse the same base quantities.
 
-```
-Complexity = w₁ * (1 / CC)
-           + w₂ * (1 / HC)
-           + w₃ * SCS 
-           + w₄ * CR    
-           + w₅ * (1 / log(LOC + 2)) 
-```
+| Symbol / Metric | Definition | Calculation |
+|---|---|---|
+| `BLOC(b)` | Build lines of code for build file `b`. | Obtained from `scc` as the `Code` count for the file. |
+| `Lines(b)` | Total physical line count. | Obtained from `scc` as the `Lines` count. |
+| `CommentLines(b)` | Number of comment lines. | Obtained from `scc` as the `Comment` count. |
+| `NonEmptyLines(b)` | Number of non-blank lines. | Used in smell-density calculations; effectively line count after removing blank lines. |
 
-**Where:**
-- `CC` = Cyclomatic Complexity for Gradle Groovy DSL and Kotlin DSL, or build-logic complexity for XML build files  
-- `HC` = Halstead Complexity
-- `SCS` = percentage of lines following style
-- `CR` = Comment Ratio (`Comment Lines / Total Lines`)  
-- `LOC` = Lines of Code  
-- `UDR` = Unused Dependency Ratio  
-- `DCR` = Dependency Conflict Ratio  
----
+### 1.3 Scope Notes
 
-### SCS (Style Conformance Score)
+- `Build_Modularity_*` fields are referenced by the pipeline, but the implementation source is not present in the current workspace. They are therefore not treated as documented metrics in this README.
+- Conceptual or proposed metrics that are not currently computed by the pipeline are intentionally omitted.
+- When a metric is unsupported for a specific build syntax, that limitation is stated explicitly in the relevant section.
 
-This repo computes style conformance as a normalized score from `0` to `100`.
+## 2. Quality Attribute Overview
 
-For CodeNarc-based Gradle style checks:
+| Quality Attribute | Low-Level Metrics | Derived / Aggregate Metrics |
+|---|---|---|
+| Complexity | `BLOC`, `Cyclomatic_Complexity`, `Normalized_CC`, `Halstead_Volume`, `Normalized_HV` | none |
+| Dependency Quality | `Dependency_Count`, `Fixed_Dependency_Count`, `Dynamic_Dependency_Count`, `Snapshot_Dependency_Count`, `Unknown_Dependency_Count` | `DSS` |
+| Determinism and Reproducibility | `Non_Deterministic_Constructs`, `Non_Deterministic_Summary` | `BDS` |
+| Maintainability | `Style_Conformance_Score`, `Comment_Ratio`, `Comment_Readability`, `Clone_Density`, `Maintainability_Smell_Count`, `Maintainability_Smell_Density`, `Maintainability_Smell_Summary` | none |
+| Coupling and Cohesion | `CP_Internal`, `CP_External`, `CP_Total`, `NCP_Internal`, `NCP_External`, `Coupling_Ratio`, `Build_Cohesion` | `EDR` reuses coupling components |
+| Evolution and Change Activity | `Churn`, `Change_Frequency`, `Avg_Logical_LOC`, `Normalized_Churn`, `Normalized_Change_Frequency` | none |
+| Security | `Security_Smell_Count`, `Security_Smell_Density`, `Security_Smell_Summary` | none |
+| Reliability | `Reliability_Issues` | `RE`, `RM` |
 
-```
-weighted_violations = 5 * P1 + 3 * P2 + 1 * P3
-SCS = max(0, 100 - ((weighted_violations / BLOC) * 100))
-```
+## 3. Complexity
 
-For detekt-based Kotlin DSL checks and the custom XML checks for Maven and Ant:
+Complexity captures the structural and cognitive burden of understanding and modifying a build script.
 
-```
-SCS = max(0, 100 - ((violations / BLOC) * 100))
-```
+### 3.1 Low-Level Metrics
 
-**Where:**
-- `P1`, `P2`, `P3` = CodeNarc priority counts
-- `violations` = total detekt or XML style findings
-- `BLOC` = Build Lines of Code from [`metrics/BLOC.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/BLOC.py)
+| Metric | Definition | Formula |
+|---|---|---|
+| `BLOC` | Build lines of code. | `BLOC(b) = code_lines(b)` |
+| `Cyclomatic_Complexity` | File-level decision or build-logic complexity. | Build-system-specific calculation described below. |
+| `Normalized_CC` | Size-normalized complexity. | `Normalized_CC(b) = Cyclomatic_Complexity(b) / BLOC(b)` |
+| `Halstead_Volume` | Halstead volume of the build script. | `HV(b) = (N1 + N2) * log2(n1 + n2)` |
+| `Normalized_HV` | Size-normalized Halstead volume. | `Normalized_HV(b) = Halstead_Volume(b) / BLOC(b)` |
 
-### Style Tooling
+### 3.2 Build-System-Specific Calculation
 
-- Gradle Groovy DSL style rules: [`config/codenarc_style.groovy`](/Users/aghammam/Desktop/BuildRefMiner/config/codenarc_style.groovy)
-- Kotlin DSL style rules: [`config/detekt_style.yml`](/Users/aghammam/Desktop/BuildRefMiner/config/detekt_style.yml)
-- Style scoring pipeline: [`metrics/style_conformance.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/style_conformance.py)
+#### Gradle Groovy DSL
 
-Repository layout note:
-- [`config/`](/Users/aghammam/Desktop/BuildRefMiner/config) stores rule definitions and thresholds used by the metric pipelines.
-- [`tools/`](/Users/aghammam/Desktop/BuildRefMiner/tools) stores the vendored tool binaries and launcher scripts used to execute those checks.
+- `Cyclomatic_Complexity` is computed with CodeNarc and aggregated at file level.
+- `Halstead_Volume` is computed from a Groovy AST-based operator/operand extractor.
 
-### Run Style Scoring
+#### Gradle Kotlin DSL
 
-From the repo root:
+- `Cyclomatic_Complexity` is computed with detekt by summing file-level `CyclomaticComplexMethod` findings.
+- `Halstead_Volume` is currently not implemented for Kotlin DSL in this pipeline, so the emitted value is `0.0`.
 
-```bash
-export CODENARC_BINARY="$PWD/tools/codenarc/codenarc"
-export DETEKT_BINARY="$PWD/tools/detekt/detekt"
-python3 metrics/style_conformance.py
-```
+#### Maven
 
-This writes `Style_Conformance_Score` into [`results/summary_metrics.csv`](/Users/aghammam/Desktop/BuildRefMiner/results/summary_metrics.csv).
-
-In the before/after metrics pipeline, style conformance is also recorded per snapshot as:
-- `Style_Conformance_Score_Before`
-- `Style_Conformance_Score_After`
-
-Comment ratio is also exported by the before/after pipeline as:
-- `Comment_Ratio_Before`
-- `Comment_Ratio_After`
-
-The current implementation computes comment ratio as:
+`Cyclomatic_Complexity` is implemented as a build-logic complexity heuristic:
 
 ```text
-Comment_Ratio = Comment_Lines / Total_Lines
+BLC_maven = 1 + count(profile) + count(activation) + count(execution)
 ```
 
-using line counts returned by `scc`.
+`Halstead_Volume` is computed from XML structure:
+- operators: XML tag names
+- operands: child-tag occurrences
 
-Comment readability is also exported by the before/after pipeline as:
-- `Comment_Readability_Before`
-- `Comment_Readability_After`
+#### Ant
 
-The current implementation computes comment readability using the `Flesch Reading Ease` score on extracted comment text from Gradle, Maven, and Ant build files:
-
-```text
-FRE = 206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)
-```
-
-Implementation notes:
-- Gradle readability is computed from extracted `//` and `/* ... */` comments
-- Maven and Ant readability are computed from extracted `<!-- ... -->` comments
-- URLs and some code-like fragments are removed before scoring
-- if there is too little comment text, the score defaults to `0.0`
-
-### Complexity Tooling Notes
-
-- `build.gradle` uses CodeNarc for cyclomatic complexity.
-- `build.gradle.kts` uses detekt for cyclomatic complexity.
-- `build.xml` and `pom.xml` do not have a standard off-the-shelf cyclomatic-complexity tool in this repo.
-- For `build.xml` and `pom.xml`, [`metrics/cyclomatic_complexity.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/cyclomatic_complexity.py) computes a custom structural **Build Logic Complexity** heuristic instead.
-- The summary CSV includes a `Complexity_Model` column so the metric source is explicit per file.
-
-For Ant (`build.xml`), the current build-logic complexity heuristic is:
+`Cyclomatic_Complexity` is implemented as a build-logic complexity heuristic:
 
 ```text
 BLC_ant = 1
         + count(condition/operator tags)
-        + count(if)
-        + count(unless)
+        + count(if attributes)
+        + count(unless attributes)
         + count(extra dependency edges from depends)
 ```
 
-Where:
-- `condition/operator tags` include `condition`, `available`, `uptodate`, `isset`, `equals`, `contains`, `matches`, `and`, `or`, and `not`
-- each `if` and each `unless` attribute contributes `1`
-- `extra dependency edges from depends` is `max(0, number_of_dependencies - 1)` per target
+`Halstead_Volume` is computed from XML structure:
+- operators: non-`project` and non-`description` XML tags
+- operands: attribute names
 
-This is documented as **Build Logic Complexity** rather than true cyclomatic complexity for XML build files.
+## 4. Dependency Quality
 
-For Maven (`pom.xml`), the current build-logic complexity heuristic is:
+Dependency quality reflects how explicitly and stably a build file declares the external artifacts it consumes.
 
-```text
-BLC_maven = 1
-          + count(profile)
-          + count(activation)
-          + count(execution)
-```
+### 4.1 Low-Level Metrics
 
-These components were chosen because they capture the main structural sources of build reasoning in Maven:
-- `profile`: represents an alternative build path or configuration branch
-- `activation`: represents the condition that enables a profile
-- `execution`: represents a concrete plugin-driven build step in the lifecycle
+| Metric | Definition | Formula |
+|---|---|---|
+| `Dependency_Count` | Total number of detected dependencies considered by the parser. | Count of parsed dependency declarations. |
+| `Fixed_Dependency_Count` | Dependencies pinned to a fixed release version. | Count of dependencies classified as `fixed`. |
+| `Dynamic_Dependency_Count` | Dependencies declared with dynamic or range-based versions. | Count of dependencies classified as `dynamic`. |
+| `Snapshot_Dependency_Count` | Dependencies declared with snapshot-style versions. | Count of dependencies classified as `snapshot`. |
+| `Unknown_Dependency_Count` | Dependencies whose version cannot be resolved to a concrete version from file contents. | Count of dependencies classified as `unknown`. |
+| `DSS` | Dependency Stability Score. | `DSS(b) = Fixed_Dependency_Count(b) / Dependency_Count(b)` |
 
-In other words:
-- more `profile` elements mean more alternate configurations to reason about
-- more `activation` elements mean more conditional behavior
-- more `execution` elements mean more explicit workflow steps
-
-This keeps the XML metric simple and explainable while still reflecting branching, conditional activation, and executable build orchestration in `pom.xml`.
-
-### Clone Density
-
-This repo computes clone density with **PMD CPD** in [`metrics/clone_density.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/clone_density.py).
-
-The score is:
+If `Dependency_Count(b) = 0`, the implementation returns:
 
 ```text
-Clone_Density = duplicated_build_logic_lines / BLOC
+DSS(b) = 0.0
 ```
 
-**Where:**
-- `duplicated_build_logic_lines` = the union of duplicated line ranges reported by PMD CPD for the file
-- `BLOC` = Build Lines of Code from [`metrics/BLOC.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/BLOC.py)
+### 4.2 Version Classes
 
-The implementation currently uses:
-- PMD CPD with `--minimum-tokens 20`
-- Groovy mode for `.gradle`
-- Kotlin mode for `.gradle.kts`
-- XML mode for `pom.xml` and `build.xml`
+| Class | Meaning | Examples |
+|---|---|---|
+| `fixed` | Explicit pinned release version. | `1.2.3` |
+| `dynamic` | Range, floating, or mutable version expression. | `1.+`, `[1.0,2.0)`, `latest.release` |
+| `snapshot` | Snapshot-style mutable version. | `1.2.3-SNAPSHOT` |
+| `unknown` | Version not concretely recoverable from file contents. | unresolved property or catalog reference |
 
-For Gradle files, PMD CPD is run on temporary files with standard parser-friendly extensions:
-- `.gradle` is analyzed as temporary `.groovy`
-- `.gradle.kts` is analyzed as temporary `.kt`
+### 4.3 Build-System-Specific Calculation
 
-For Groovy Gradle files, the script also normalizes some interpolation forms before running PMD CPD so tokenization stays stable while preserving duplicated structure.
+#### Gradle
 
-In practice, the pipeline is:
-1. detect the build file type
-2. choose the PMD CPD language (`groovy`, `kotlin`, or `xml`)
-3. run PMD CPD and collect duplicated line ranges
-4. merge overlapping duplicated ranges for the target file
-5. divide duplicated lines by BLOC
-6. write the result to the `Clone_Density` column in [`results/summary_metrics.csv`](/Users/aghammam/Desktop/BuildRefMiner/results/summary_metrics.csv)
+- Dependency declarations are extracted from string-style and map-style dependency declarations.
+- Local property-resolution heuristics are applied before classifying versions.
 
----
-## 2. Dependency Quality
+#### Maven
 
-This repo now computes a **Dependency Stability Score (`DSS`)** for Gradle, Maven, and Ant build files.
+- Dependency versions are read from dependency declarations.
+- If a dependency omits a local version, the pipeline consults local `dependencyManagement` when available.
+- Local `<properties>` are resolved before classification.
 
-The score is:
+#### Ant
+
+- Dependencies are inferred from versioned JAR references found in XML attribute values.
+- Versions are extracted from JAR file names after resolving simple property references.
+
+## 5. Determinism and Reproducibility
+
+Determinism measures the degree to which a build script avoids constructs that can make repeated executions produce variable results.
+
+### 5.1 Low-Level Metrics
+
+| Metric | Definition | Formula |
+|---|---|---|
+| `Non_Deterministic_Constructs` | Number of detected non-deterministic constructs. | Count of lines matching any supported non-deterministic construct family. |
+| `Non_Deterministic_Summary` | Set of non-deterministic construct families present. | Semicolon-separated set of detected construct labels. |
+| `BDS` | Build Script Determinism Score. | `BDS(b) = max(0, 1 - (Non_Deterministic_Constructs(b) / BLOC(b)))` |
+
+If `BLOC(b) = 0`, the implementation returns:
 
 ```text
-DSS = Fixed_Version_Dependencies / Total_Dependencies
+BDS(b) = 0.0
 ```
 
-Where:
-- `Fixed_Version_Dependencies` = number of dependencies whose version resolves to a fixed release
-- `Total_Dependencies` = total number of detected dependencies considered by the parser
+### 5.2 Non-Deterministic Construct Families
 
-Version classification in the current implementation:
-- `fixed`: explicit pinned release versions such as `1.2.3`
-- `dynamic`: version ranges or floating versions such as `1.+`, `[1.0,2.0)`, `latest.release`
-- `snapshot`: snapshot-style versions such as `1.2.3-SNAPSHOT`
-- `unknown`: dependencies whose version cannot be resolved to a concrete version from the file contents
+| Family | Meaning | Representative Examples |
+|---|---|---|
+| `TIME` | Time-dependent values introduced at build time. | `System.currentTimeMillis()`, `Instant.now()`, `new Date()`, `${maven.build.timestamp}` |
+| `RANDOMNESS` | Randomness sources that may change outputs between runs. | `Math.random()`, `new Random()`, `SecureRandom`, `UUID.randomUUID()` |
+| `NON_REPRODUCIBLE_STEP` | Explicit mutable fetch or checkout steps. | `curl`, `wget`, `Invoke-WebRequest`, `git clone`, `svn checkout`, Ant `<get>` |
 
-Interpretation:
-- a higher `DSS` means a larger share of dependencies are pinned to fixed versions
-- a lower `DSS` means the build relies more on dynamic, snapshot, or unresolved dependency declarations
-- if no dependencies are detected for a file, the implementation returns `DSS = 0.0`
+### 5.3 Build-System Coverage
 
-Current implementation notes:
-- Gradle uses [`tools/secure_linter/gradle_parser.py`](/Users/aghammam/Desktop/BuildRefMiner/tools/secure_linter/gradle_parser.py) plus local property-resolution heuristics in [`metrics/dependency_stability.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/dependency_stability.py)
-- Maven uses XML traversal and resolves versions from local `<properties>` and `<dependencyManagement>` when available
-- Ant uses parsed/resolved JAR references in XML attribute values and extracts versions from JAR file names when possible
+`BDS` is implemented for all supported build systems:
+- Gradle
+- Maven
+- Ant
 
-The before/after pipeline exports:
-- `Dependency_Count_Before` and `Dependency_Count_After`
-- `Fixed_Dependency_Count_Before` and `Fixed_Dependency_Count_After`
-- `Dynamic_Dependency_Count_Before` and `Dynamic_Dependency_Count_After`
-- `Snapshot_Dependency_Count_Before` and `Snapshot_Dependency_Count_After`
-- `Unknown_Dependency_Count_Before` and `Unknown_Dependency_Count_After`
-- `DSS_Before` and `DSS_After`
-- `DSS_Delta`
+The current detector is text-based and scans the file contents for the construct families above.
 
-Conceptual note retained from the original README:
+## 6. Maintainability
 
-```
- w₁ * (1 - UDR) + w₂ * (1 - DCR)
-```
+Maintainability captures how easy a build script is to read, diagnose, update, and evolve.
 
-**Where:**
-- `UDR` = Unused Dependency Ratio  
-- `DCR` = Dependency Conflict Ratio
----
+No single aggregate maintainability score is currently emitted. Instead, the attribute is characterized through the low-level metrics below.
 
-### Build Script Determinism
+### 6.1 Documentation and Style Metrics
 
-This repo also computes a **Build Script Determinism Score (`BDS`)** for Gradle, Maven, and Ant build files.
+| Metric | Definition | Formula |
+|---|---|---|
+| `Comment_Ratio` | Share of comment lines in the file. | `Comment_Ratio(b) = CommentLines(b) / Lines(b)` |
+| `Comment_Readability` | Readability of extracted comments measured with Flesch Reading Ease. | `FRE = 206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)` |
+| `Style_Conformance_Score` | Degree to which the file satisfies style rules. | `SCS(b) = max(0, 100 - ((violations / BLOC(b)) * 100))` |
 
-The score is:
+Gradle Groovy style uses weighted CodeNarc priorities:
 
 ```text
-BDS = max(0, 1 - (NDC / BLOC))
+weighted_violations = 5 * P1 + 3 * P2 + P3
+SCS = max(0, 100 - ((weighted_violations / BLOC) * 100))
 ```
 
-Where:
-- `NDC` = number of detected non-deterministic constructs
-- `BLOC` = build lines of code
+Kotlin DSL, Maven, and Ant use their respective violation totals directly in the same normalization formula.
 
-The current implementation treats the following as non-deterministic construct families:
-- `TIME`: time-based values such as `System.currentTimeMillis()`, `Instant.now()`, `new Date()`, or Maven build timestamps
-- `RANDOMNESS`: randomness sources such as `Math.random()`, `new Random()`, `SecureRandom`, or `UUID.randomUUID()`
-- `NON_REPRODUCIBLE_STEP`: explicit mutable fetch or checkout steps such as `curl`, `wget`, `Invoke-WebRequest`, `git clone`, `svn checkout`, or Ant `<get>`
+### 6.2 Duplication Metric
 
-Interpretation:
-- a higher `BDS` means the build file contains fewer non-deterministic constructs per build line
-- a lower `BDS` means the build file is more likely to produce variable behavior across executions
+| Metric | Definition | Formula |
+|---|---|---|
+| `Clone_Density` | Fraction of duplicated build logic lines. | `Clone_Density(b) = duplicated_build_logic_lines(b) / BLOC(b)` |
 
-The before/after pipeline exports:
-- `Non_Deterministic_Constructs_Before` and `Non_Deterministic_Constructs_After`
-- `Non_Deterministic_Summary_Before` and `Non_Deterministic_Summary_After`
-- `BDS_Before` and `BDS_After`
-- `BDS_Delta`
+### 6.3 Maintainability Smell Metrics
 
-## 3. Maintainability
+| Metric | Definition | Formula |
+|---|---|---|
+| `Maintainability_Smell_Count` | Number of maintainability smell findings. | Count of detected maintainability smells. |
+| `Maintainability_Smell_Density` | Smell density normalized per 1000 non-empty lines. | `Maintainability_Smell_Density(b) = (Maintainability_Smell_Count(b) / NonEmptyLines(b)) * 1000` |
+| `Maintainability_Smell_Summary` | Set of maintainability smell categories present. | Semicolon-separated set of smell identifiers. |
 
-```
-Maintainability = f(Size, Complexity, Volume, Duplication, Smells, Effort, Volatility)
-```
+Tracked maintainability smell categories:
+- `COMPLEXITY`
+- `DUPLICATES`
+- `EMPTY_INCOMPLETE_TAGS`
+- `INCONSISTENT_DEPENDENCY_MANAGEMENT`
+- `LACK_OF_ERROR_HANDLING`
+- `MISSING_DEPENDENCY_VERSION`
+- `SUSPICIOUS_COMMENTS`
+- `DEPRECATED_DEPENDENCIES`
+- `OUTDATED_DEPENDENCIES`
 
-This repo currently tracks the following maintainability indicators:
-- `BLOC` for size
-- `Cyclomatic Complexity`
-- `Halstead Volume`
-- `Normalized CC` as `CC / BLOC`
-- `Normalized HV` as `HV / BLOC`
-- `Style Conformance Score`
-- `Comment Ratio`
-- `Comment Readability` using Flesch Reading Ease on extracted comment text
-- `Clone Density`
-- `Smell Density`
-- `Code Churn` for effort
-- `Change Frequency` for volatility
+### 6.4 Calculation Notes
 
-For each build file `f` in an observation window `T`, code churn is computed as the total number of added and deleted lines across all commits modifying `f`. Change frequency is computed as the number of commits touching `f` during `T`.
+#### Comment Readability
 
-In the current before/after pipeline, `T` is implemented as a rolling `30`-day observation window ending at the reference commit.
+- Gradle comment readability is computed from extracted `// ...` and `/* ... */` comments.
+- Maven and Ant comment readability are computed from extracted `<!-- ... -->` comments.
+- The extracted text is normalized before applying the Flesch Reading Ease formula.
 
-To make these values comparable across files of different sizes, both metrics are normalized by the average logical LOC of the file in the same window.
+#### Style Conformance
 
-```math
-\mathrm{Churn}(f, T) = \sum_{c \in T_f} \left(\mathrm{added\_lines}_{c,f} + \mathrm{deleted\_lines}_{c,f}\right)
-```
+- Gradle Groovy style conformance is derived from CodeNarc findings.
+- Gradle Kotlin DSL style conformance is derived from detekt findings.
+- Maven and Ant style conformance are derived from custom XML style checks.
 
-```math
-\mathrm{ChangeFrequency}(f, T) = |T_f|
-```
+#### Clone Density
 
-```math
-\mathrm{NormalizedChurn}(f, T) = \frac{\mathrm{Churn}(f, T)}{\mathrm{AvgLogicalLOC}(f, T)}
-```
+- Gradle and Kotlin DSL files are analyzed with PMD CPD using Groovy or Kotlin tokenization when available.
+- Maven and Ant files are analyzed with PMD CPD in XML mode when available.
+- A repeated-line-window fallback is used when the preferred duplication path is unavailable.
 
-```math
-\mathrm{NormalizedChangeFrequency}(f, T) = \frac{\mathrm{ChangeFrequency}(f, T)}{\mathrm{AvgLogicalLOC}(f, T)} \times 100
-```
+## 7. Coupling and Cohesion
 
-Where:
-- `T_f` is the set of commits in observation window `T` that modify file `f`
-- `AvgLogicalLOC(f, T)` is the average logical LOC of file `f` over the same window
+Coupling and cohesion describe the extent to which build logic is externally connected and internally related.
 
-These indicators are written into [results/summary_metrics.csv](/Users/aghammam/Desktop/BuildRefMiner/results/summary_metrics.csv) as part of the before/after metrics pipeline. The CSV keeps both the raw values (`Churn_*`, `Change_Frequency_*`, `Cyclomatic_Complexity_*`, `Halstead_Volume_*`) and the normalized values (`Normalized_Churn_*`, `Normalized_Change_Frequency_*`, `Normalized_CC_*`, `Normalized_HV_*`), together with `Avg_Logical_LOC_*`. It also includes readability and documentation-related fields such as `Style_Conformance_Score_*`, `Comment_Ratio_*`, and `Comment_Readability_*`.
+### 7.1 Coupling Metrics
 
-### Maintainability Smells
+| Metric | Definition | Formula |
+|---|---|---|
+| `CP_Internal` | Internal coupling among elements inside the same build file. | `CP_Internal(b) = T_int + V_shared + C_internal` |
+| `CP_External` | Coupling driven by external modules, artifacts, repositories, tools, and resources. | `CP_External(b) = M + D + P + R + E + U` |
+| `CP_Total` | Total coupling. | `CP_Total(b) = CP_Internal(b) + CP_External(b)` |
+| `NCP_Internal` | Size-normalized internal coupling. | `NCP_Internal(b) = CP_Internal(b) / BLOC(b)` |
+| `NCP_External` | Size-normalized external coupling. | `NCP_External(b) = CP_External(b) / BLOC(b)` |
+| `Coupling_Ratio` | Share of total coupling that is external. | `Coupling_Ratio(b) = CP_External(b) / CP_Total(b)` |
 
-This repo also extracts **maintainability smells** for build files and saves them as part of the before/after metrics pipeline.
+Component meanings:
+- `T_int`: internal task or target dependency links
+- `V_shared`: variables or properties shared by multiple internal elements
+- `C_internal`: internal configuration references reused across elements
+- `M`: inter-module references
+- `D`: external dependencies
+- `P`: plugins
+- `R`: repositories or remote artifact sources
+- `E`: external commands or build-script execution hooks
+- `U`: environment variables, absolute paths, and URL-based resources
 
-Supported build systems:
-- `Gradle`
-- `Maven`
-- `Ant`
+### 7.2 Cohesion Metric
 
-The maintainability smell extractor lives in [tools/secure_linter/maintainability_smells.py](/Users/aghammam/Desktop/BuildRefMiner/tools/secure_linter/maintainability_smells.py) and uses build-system-specific parsers and checks under [tools/secure_linter](/Users/aghammam/Desktop/BuildRefMiner/tools/secure_linter).
+| Metric | Definition | Formula |
+|---|---|---|
+| `Build_Cohesion` | Average pairwise feature overlap among build elements. | Average pairwise Jaccard similarity across extracted element feature sets. |
 
-The current maintainability smell categories are:
-- `Complexity`
-- `Duplicates`
-- `Empty / Incomplete Tags`
-- `Inconsistent Dependency Management`
-- `Lack of Error Handling`
-- `Missing Dependency Version`
-- `Suspicious Comments`
-- `Deprecated Dependencies`
-- `Outdated Dependencies`
+The elements compared depend on the build system:
+- Gradle: task feature sets
+- Maven: plugin execution feature sets
+- Ant: target feature sets
 
-These smells are reported per file and also aggregated into the commit-level `__COMMIT_TOTAL__` row in [results/summary_metrics.csv](/Users/aghammam/Desktop/BuildRefMiner/results/summary_metrics.csv).
+## 8. Evolution and Change Activity
 
-The summary CSV includes:
-- total maintainability smell count before and after the change
-- maintainability smell density before and after the change
-- maintainability smell summary fields
-- one-hot smell columns such as `Before_COMPLEXITY` and `After_OUTDATED_DEPENDENCIES`
+Evolution metrics characterize how frequently a build file changes and how much code churn it experiences over time.
 
-### Security Smells
+### 8.1 Low-Level Metrics
 
-In addition to maintainability smells, the repo extracts a focused set of **security smells** for build configurations.
+| Metric | Definition | Formula |
+|---|---|---|
+| `Churn` | Total added and deleted lines over the observation window. | `Churn(f, T) = sum(added_lines + deleted_lines)` |
+| `Change_Frequency` | Number of commits touching the file during the observation window. | `Change_Frequency(f, T) = number_of_commits_touching_f` |
+| `Avg_Logical_LOC` | Average logical LOC of the file over historical snapshots in the window. | Mean historical `BLOC` across the observation window. |
+| `Normalized_Churn` | Size-normalized churn. | `Normalized_Churn(f, T) = Churn(f, T) / Avg_Logical_LOC(f, T)` |
+| `Normalized_Change_Frequency` | Size-normalized change frequency. | `Normalized_Change_Frequency(f, T) = (Change_Frequency(f, T) / Avg_Logical_LOC(f, T)) * 100` |
 
-Supported build systems:
-- `Gradle`
-- `Maven`
-- `Ant`
+The current before/after pipeline uses a rolling observation window ending at the analyzed commit.
 
-Current scope note:
-- `Makefile` and `CMake` are intentionally not included in the shared `security_smells.py` pipeline at this stage
+## 9. Security
 
-The shared security smell extractor lives in [tools/secure_linter/security_smells.py](/Users/aghammam/Desktop/BuildRefMiner/tools/secure_linter/security_smells.py). For Ant, the Ant-specific security heuristics are implemented in [tools/secure_linter/ant_security_checks.py](/Users/aghammam/Desktop/BuildRefMiner/tools/secure_linter/ant_security_checks.py).
+Security is characterized through smell-based indicators rather than a single aggregate security score.
 
-The current security smell categories are:
-- `Hardcoded Credentials`
-- `Insecure URLs`
-- `Wildcard Usage`
-- `Hardcoded Paths/URLs`
+### 9.1 Security Smell Metrics
 
-These security smells are also written into [results/summary_metrics.csv](/Users/aghammam/Desktop/BuildRefMiner/results/summary_metrics.csv), both per file and in the commit summary row.
+| Metric | Definition | Formula |
+|---|---|---|
+| `Security_Smell_Count` | Number of detected security smell findings. | Count of detected security smells. |
+| `Security_Smell_Density` | Security smell density normalized per 1000 non-empty lines. | `Security_Smell_Density(b) = (Security_Smell_Count(b) / NonEmptyLines(b)) * 1000` |
+| `Security_Smell_Summary` | Set of security smell categories present. | Semicolon-separated set of smell identifiers. |
 
-The summary CSV includes:
-- `Before_Security_Smell_Count` and `After_Security_Smell_Count`
-- `Before_Security_Smell_Density` and `After_Security_Smell_Density`
-- `Before_Security_Smell_Summary` and `After_Security_Smell_Summary`
-- `Security_Smell_Count_Delta` and `Security_Smell_Density_Delta`
-- one-hot security smell columns such as `Before_HARDCODED_CREDENTIALS` and `After_WILDCARD_USAGE`
+Tracked security smell categories:
+- `HARDCODED_CREDENTIALS`
+- `INSECURE_URLS`
+- `WILDCARD_USAGE`
+- `HARDCODED_PATHS_AND_URLS`
 
-### Reliability Metric
+## 10. Reliability
 
-The before/after pipeline also exports an unweighted reliability metric based on the issue types you selected.
+Reliability captures build-script robustness using issue density, dependency stability, and external-system reliance.
 
-The current implementation keeps two related reliability scores:
-- `RE`: issue-based reliability derived only from reliability issues and `BLOC`
-- `RM`: overall reliability derived from issue-based reliability, dependency stability, and external dependency risk
+### 10.1 Low-Level and Derived Metrics
 
-The current implementation defines:
-
-```text
-RI = HARDCODED_CREDENTIALS
-   + INSECURE_URLS
-   + WILDCARD_USAGE
-   + HARDCODED_PATHS_AND_URLS
-   + DEPRECATED_DEPENDENCIES
-   + OUTDATED_DEPENDENCIES
-```
-
-where each term is the number of detected findings for that smell category in the snapshot, not just a binary presence flag.
-
-The reliability score is:
-
-```text
-RE = max(0, 1 - (RI / BLOC))
-```
+| Metric | Definition | Formula |
+|---|---|---|
+| `Reliability_Issues` | Total count of reliability-relevant smell findings. | `RI(b) = HC(b) + IU(b) + WU(b) + HP(b) + DD(b) + OD(b)` |
+| `RE` | Issue-based reliability score. | `RE(b) = max(0, 1 - (RI(b) / BLOC(b)))` |
+| `EDR` | External Dependency Risk. | `EDR(b) = (D + P + R + E + U) / CP_Total(b)` |
+| `RM` | Overall reliability metric. | `RM(b) = (RE(b) + DSS(b) + (1 - EDR(b))) / 3` |
 
 Where:
-- `RI` = total reliability issue count
-- `BLOC` = build lines of code for the snapshot
+- `HC` = hardcoded credentials count
+- `IU` = insecure URLs count
+- `WU` = wildcard usage count
+- `HP` = hardcoded paths or URLs count
+- `DD` = deprecated dependencies count
+- `OD` = outdated dependencies count
 
-The overall reliability metric is:
+### 10.2 Reliability Interpretation
 
-```text
-RM = (RE + DSS + (1 - EDR)) / 3
-```
-
-Where:
-- `RE` = issue-based reliability
-- `DSS` = Dependency Stability Score
-- `EDR` = External Dependency Risk
-
-Interpretation:
-- higher `RE` means fewer detected reliability issues per build line
-- higher `DSS` means a larger share of dependencies are fixed-version dependencies
+- higher `RE` means fewer reliability issues per build line
+- higher `DSS` means a larger share of dependencies are pinned to fixed versions
 - lower `EDR` means less reliance on external systems
 - higher `RM` therefore indicates a more reliable build file overall
 
-The summary CSV includes:
-- `Reliability_Issues_Before` and `Reliability_Issues_After`
-- `RE_Before` and `RE_After`
-- `RE_Delta`
-- `RM_Before` and `RM_After`
-- `RM_Delta`
+### 10.3 External Dependency Risk Details
 
----
+`EDR` is derived from the coupling model:
 
-## 4. Coupling and Cohesion Metrics
-
-### 4.1 Internal and External Coupling
-
-This repo models coupling for a build file or build module `b` as two separate quantities.
-
-Internal coupling captures how strongly elements inside the same build file depend on one another.
-
-```math
-CP_{\mathrm{internal}}(b) = T_{\mathrm{int}} + V_{\mathrm{shared}} + C_{\mathrm{internal}}
+```text
+EDR(b) = (D + P + R + E + U) / CP_Total(b)
 ```
 
-Where:
-- `T_int` = number of internal task or target dependency links
-- `V_shared` = number of variables or properties reused by multiple internal elements
-- `C_internal` = number of internal configuration references reused across multiple internal elements
+Local module links `M` are intentionally excluded from the `EDR` numerator because they represent project-internal structure rather than reliance on external systems.
 
-External coupling captures how strongly the build file depends on outside modules, libraries, tools, repositories, and environment-specific resources.
+### 10.4 Composite Reliability Scope
 
-```math
-CP_{\mathrm{external}}(b) = M + D + P + R + E + U
-```
+The current implementation keeps two reliability views:
+- `RE`: issue-based reliability derived only from reliability issues and `BLOC`
+- `RM`: overall reliability derived from `RE`, `DSS`, and `EDR`
 
-Where:
-- `M` = inter-module references
-- `D` = external dependencies or libraries
-- `P` = plugins or externally defined task types
-- `R` = repositories or remote artifact sources
-- `E` = external commands or external build/script invocations
-- `U` = environment variables, absolute paths, and non-repository URLs
-
-The total coupling value is:
-
-```math
-CP(b) = CP_{\mathrm{internal}}(b) + CP_{\mathrm{external}}(b)
-```
-
-To make file-level comparisons more meaningful across different build-file sizes, the pipeline also exports normalized coupling:
-
-```math
-NCP_{\mathrm{internal}}(b) = \frac{CP_{\mathrm{internal}}(b)}{BLOC(b)}
-```
-
-```math
-NCP_{\mathrm{external}}(b) = \frac{CP_{\mathrm{external}}(b)}{BLOC(b)}
-```
-
-And an external-coupling ratio:
-
-```math
-CouplingRatio(b) = \frac{CP_{\mathrm{external}}(b)}{CP(b)}
-```
-
-Interpretation:
-- a higher `CP_internal` means stronger internal interdependence inside the same file
-- a higher `CP_external` means the build file relies more on external modules, tools, repositories, or environment-specific resources
-- a higher `CouplingRatio` means coupling is driven more by external factors than by internal structure
-
-The before/after pipeline also exports an **External Dependency Risk (`EDR`)** score that focuses specifically on reliance on external systems.
-
-Methodology paragraph:
-
-External Dependency Risk (`EDR`) measures the extent to which a build file relies on external systems rather than internal project structure. In this work, external systems include external dependency declarations, plugin references, remote repositories, external script or command execution hooks, and environment, path, or URL based external resource references. The metric is derived from the build coupling model and is normalized by total coupling so that files of different sizes and structures remain comparable. Local module links are intentionally excluded from the risk numerator because they represent internal project modularity rather than reliance on outside infrastructure or services.
-
-The current implementation defines:
-
-```math
-EDR(b) = \frac{D + P + R + E + U}{CP(b)}
-```
-
-Where:
-- `D` = external dependency declarations
-- `P` = plugin references
-- `R` = remote repositories
-- `E` = external scripts or command execution hooks
-- `U` = environment, absolute-path, and URL-based external resource references
-- `CP(b)` = total coupling for build file `b`
-
-Implementation note:
-- local module links `M` are excluded from the `EDR` numerator because they represent project-internal structure, not external-system reliance
-
-The summary CSV includes:
-- `External_Risk_Factors_Before` and `External_Risk_Factors_After`
-- `EDR_Before` and `EDR_After`
-- `EDR_Delta`
-
-### 4.2 Gradle Coupling Calculation
-
-Gradle coupling is implemented in [metrics/build_coupling.py](/Users/aghammam/Desktop/BuildRefMiner/metrics/build_coupling.py). For Groovy DSL files (`.gradle`), the preferred implementation uses the Groovy AST helper [metrics/gradle_coupling_ast.groovy](/Users/aghammam/Desktop/BuildRefMiner/metrics/gradle_coupling_ast.groovy). For Kotlin DSL files (`.gradle.kts`), the pipeline uses the structured fallback in Python.
-
-For Gradle, the current implementation calculates:
-
-- `T_int`: task-to-task links created by `dependsOn`, `mustRunAfter`, `shouldRunAfter`, and `finalizedBy` when the referenced task is declared in the same file
-- `V_shared`: local variables, `ext` properties, and `findProperty(...)` references reused by at least two task closures
-- `C_internal`: shared internal configuration references reused by at least two task closures, such as `sourceSets.*`, `inputs.*`, `outputs.*`, and `configurations.*`
-- `M`: module references declared with `project(':module')`
-- `D`: external dependency declarations through dependency configuration methods such as `implementation`, `api`, `runtimeOnly`, and `testImplementation`
-- `P`: plugin references declared through `plugins { id(...) }` or `apply plugin: ...`
-- `R`: repository references such as `mavenCentral()`, `google()`, `gradlePluginPortal()`, `mavenLocal()`, `jcenter()`, `ivy()`, and `maven { ... }`
-- `E`: external script or command usage such as `apply from: ...`, `exec`, `javaexec`, and `commandLine`
-- `U`: environment and external resource references such as `System.getenv(...)`, `System.getProperty(...)`, explicit absolute paths, and explicit URLs
-
-This gives Gradle an AST-backed internal/external split that is stronger than plain regex matching for Groovy-based build files.
-
-### 4.3 Maven Coupling Calculation
-
-Maven coupling is implemented through XML tree analysis in [metrics/build_coupling.py](/Users/aghammam/Desktop/BuildRefMiner/metrics/build_coupling.py).
-
-For Maven, the current implementation calculates:
-
-- `T_int`: links between plugin executions inside the same `pom.xml` when executions share the same plugin or lifecycle phase
-- `V_shared`: Maven property references such as `${...}` reused across two or more plugin executions
-- `C_internal`: configuration element names reused across multiple plugin execution `<configuration>` blocks
-- `M`: inter-module references from local reactor-module links, including `<modules><module>...</module></modules>` entries and dependency declarations whose `artifactId` matches another local artifact in the same project snapshot
-- `D`: dependency declarations that are not resolved as local modules
-- `P`: declared Maven plugins
-- `R`: declared `<repository>` and `<pluginRepository>` entries
-- `E`: plugins that explicitly bridge to external command execution, currently `exec-maven-plugin` and `maven-antrun-plugin`
-- `U`: environment-sensitive and external resource references, including `${env.*}`, `${user.*}`, `systemPath`, absolute filesystem paths, and non-repository URLs
-
-This means Maven internal coupling is based on shared execution structure inside one POM, while external coupling is based on the declared dependencies, plugins, repositories, and environment-dependent references around that POM.
-
-### 4.4 Ant Coupling Calculation
-
-Ant coupling is implemented through XML tree analysis in [metrics/build_coupling.py](/Users/aghammam/Desktop/BuildRefMiner/metrics/build_coupling.py).
-
-For Ant, the current implementation calculates:
-
-- `T_int`: target-to-target links created by `depends="..."` and by `<antcall target="...">` when the referenced target exists in the same `build.xml`
-- `V_shared`: Ant property references such as `${property.name}` reused across two or more targets
-- `C_internal`: internal reusable configuration references reused across multiple targets, including `refid`, `id`, and shared resource-collection constructs such as `path`, `fileset`, and `patternset`
-- `M`: external build-module invocations such as `<import>`, `<include>`, `<subant>`, and `<ant>` when it points to another build file or directory
-- `D`: explicit versioned JAR references found in the Ant build content
-- `P`: externally defined Ant task types such as `<taskdef>` and `<typedef>`
-- `R`: remote resource endpoints used for download-oriented tasks such as `<get src="...">`
-- `E`: external command execution through `<exec>` and `<java>`
-- `U`: environment and machine-specific references such as `${env.*}`, `environment="..."`, absolute paths, and non-repository URLs
-
-This keeps the Ant version aligned with the same internal/external decomposition used for Gradle and Maven, while reflecting the fact that Ant expresses coupling mainly through targets, imported builds, custom task definitions, and explicit execution tasks.
-
-### 4.5 Coupling Output Columns
-
-In the current metrics pipeline, coupling is exported to [results/summary_metrics.csv](/Users/aghammam/Desktop/BuildRefMiner/results/summary_metrics.csv) with these columns:
-- `CP_Internal_*`
-- `CP_External_*`
-- `CP_Total_*`
-- `NCP_Internal_*`
-- `NCP_External_*`
-- `Coupling_Ratio_*`
-
-These values are emitted for both the before and after snapshots of each changed build file, and they are also aggregated in the commit-level `__COMMIT_TOTAL__` row.
-
-## 5. Cohesion Notes
-
-**Build cohesion** in this project is implemented as a heuristic based on **feature overlap** between build elements, not as a direct graph or pair-counting metric.
-
-For each supported build system, the analyzer extracts a set of features for each relevant build element and then measures how similar those feature sets are to one another.
-
----
-
-### Elements Used by the Heuristic
-
-| Build system | Element compared | Example extracted features |
-|--------------|------------------|----------------------------|
-| **Gradle / Groovy / Kotlin DSL** | Task | `keyword:doLast`, `keyword:dependsOn`, `property:outputDir`, `dep::lib`, `sourceSet:main` |
-| **Maven** | Plugin execution | `plugin:maven-resources-plugin`, `goal:copy-resources`, `config:outputDirectory`, `config:resource` |
-| **Ant** | Target | `depends:init`, `task:mkdir`, `task:copy`, `attr:copy.tofile`, `cond_if:can.run` |
-
-The metric only compares elements for which at least one recognizable feature is extracted.
-
----
-
-### What Increases Cohesion in This Implementation
-
-| Pattern | Why it increases the score |
-|---------|----------------------------|
-| **Tasks or targets using the same keywords** | Shared features increase overlap between feature sets. |
-| **Repeated use of the same properties or variables** | Matching `property:*` features raise similarity. |
-| **Common dependency or execution structure** | Shared `depends:*`, `goal:*`, or `dep:*` features make elements look more alike. |
-| **Repeated configuration structure** | Matching `config:*`, `task:*`, or `attr:*` features increase Jaccard similarity. |
-
----
-
-### What Lowers Cohesion in This Implementation
-
-| Pattern | Why it lowers the score |
-|---------|-------------------------|
-| **Isolated tasks/targets/executions** | They share few or no extracted features with other elements. |
-| **Different configuration styles across elements** | Larger feature-set differences reduce pairwise overlap. |
-| **Elements with unique dependencies or properties** | Unique features enlarge the union without increasing the intersection. |
-
----
-
-### Cohesion Metric Formula
-
-For two build elements with feature sets `A` and `B`, the implementation computes **Jaccard similarity**:
-
-```math
-J(A, B) = \frac{|A \cap B|}{|A \cup B|}
-```
-
-The final cohesion score is the average of that value across all element pairs:
-
-```math
-Cohesion = \operatorname{avg}_{i < j} J(F_i, F_j)
-```
-
-Where:
-- **`F_i`** is the extracted feature set for build element `i`
-- **`J(F_i, F_j)`** is the overlap between two elements' feature sets
-- **Cohesion** is reported in the range `0.0` to `1.0`
-
-Special cases in the current implementation:
-- If no feature sets are extracted, cohesion is `0.0`
-- If exactly one feature set is extracted, cohesion is `1.0`
-
----
-
-### Example
-
-```groovy
-ext.outputDir = "$buildDir/custom"
-
-task compile {
-    doLast {
-        println outputDir
-    }
-}
-
-task archive {
-    dependsOn compile
-    doLast {
-        println outputDir
-    }
-}
-```
-
-Approximate extracted feature sets:
-- `compile` -> `{keyword:doLast, property:outputDir}`
-- `archive` -> `{keyword:dependsOn, keyword:doLast, property:outputDir}`
-
-Pairwise similarity:
-
-```math
-\frac{|\{keyword:doLast, property:outputDir\}|}{|\{keyword:dependsOn, keyword:doLast, property:outputDir\}|}
-= \frac{2}{3} \approx 0.6667
-```
-
-Since there is only one pair in this example, the final cohesion score is also **0.6667**.
-
-> *Note: In this implementation, cohesion rises when build elements share more extracted features, and falls when their feature sets diverge.*
-
-
----
-
-## 6. Code Duplication
-
-### Definition
-
-**Code duplication** in build systems refers to identical or near-identical logic repeated across build configuration files. This could include repeated tasks, dependencies, or configuration blocks.
-
-Excessive duplication increases maintenance overhead, makes debugging harder, and reduces the modularity and quality of the build script.
-
----
-
-### Code Duplication Metric (CDM)
-
-```math
-CDM = \frac{\text{Total Duplicated Lines}}{\text{Total Significant Lines}}
-```
-
-### Where:
-
-- **Duplicated Lines**: Lines that appear in multiple places (identical or semantically similar).
-- **Significant Lines**: All lines excluding comments, whitespace, and boilerplate.
-
-A high CDM indicates high redundancy and poor maintainability.
-
----
-
-### Example (Gradle)
-
-```groovy
-task cleanTemp {
-    doLast {
-        delete "$buildDir/temp"
-    }
-}
-
-task cleanCache {
-    doLast {
-        delete "$buildDir/temp"
-    }
-}
-```
-
-- Here, both tasks perform the same logic.
-- This duplication could be avoided by reusing a shared method or task.
-
----
-
-### Example (Maven)
-
-```xml
-<plugin>
-    <groupId>org.apache.maven.plugins</groupId>
-    <artifactId>maven-compiler-plugin</artifactId>
-    <version>3.8.1</version>
-</plugin>
-<!-- Repeated again in another profile -->
-<plugin>
-    <groupId>org.apache.maven.plugins</groupId>
-    <artifactId>maven-compiler-plugin</artifactId>
-    <version>3.8.1</version>
-</plugin>
-```
-
-- Plugin configuration repeated across profiles or executions is a form of duplication.
-
----
-
-### Detection Methods
-
-- **AST-Based Clone Detection**: Normalize and parse the Abstract Syntax Tree of build files to detect structure-level clones.
-- **Token-Based Detection**: Count repeated blocks of tokens or lines.
-- **Semantic Detection**: Identify logically equivalent code even if written differently.
-
----
-
-## 7. Security Metric
-
-### Definition
-
-Security in build systems refers to how well the build configuration avoids introducing vulnerabilities through:
-
-- Insecure or outdated dependencies
-- Use of scripts or plugins from untrusted sources
-- Hardcoded credentials or sensitive information
-- Missing integrity verification (e.g., checksums)
-
----
-
-### Proposed Security Metric (SM)
-
-```math
-SM = 1 - \left( \frac{V + H + T + M}{N} \right)
-```
-
-### Where:
-
-- `V`: Number of known vulnerable dependencies
-- `H`: Number of hardcoded secrets (tokens, passwords, etc.)
-- `T`: Number of third-party plugins used without verification (e.g., from unknown repositories)
-- `M`: Number of misconfigurations (e.g., unsigned artifacts, skipped verifications)
-- `N`: Total number of build components scanned
-
-The result is normalized between 0 (insecure) and 1 (fully secure).
-
----
-
-### Example: Gradle
-
-```groovy
-dependencies {
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.9.0'  // vulnerable version
-}
-
-ext.token = "hardcoded-secret-token"
-```
-
-Violations:
-
-- 1 vulnerable dependency (`V = 1`)
-- 1 hardcoded secret (`H = 1`)
-- 0 third-party unverified (`T = 0`)
-- 0 misconfigurations (`M = 0`)
-- `N = 3`
-
-Security metric:
-
-```math
-SM = 1 - (1 + 1 + 0 + 0) / 3 = 1 - 2/3 = 0.33
-```
-
----
-
-### Detection Tools
-
-- **Dependency Scanners**: OWASP Dependency-Check, Snyk, OSS Index
-- **Secret Scanners**: TruffleHog, GitLeaks
-- **Lint Rules**: Custom Gradle or Maven linters to detect insecure configurations
-
----
-
-## 8. Build Run Time (BRT) Metric
-
-### Definition
-
-**Build Run Time (BRT)** refers to the total time taken to execute a full build process from start to finish. This includes:
-
-- Dependency resolution
-- Compilation
-- Testing
-- Packaging
-- Any custom build steps (e.g., signing, deployment)
-
-BRT is a key performance metric to evaluate the efficiency and responsiveness of build systems such as Gradle, Maven, and Ant.
-
----
-
-### Metric Formula
-
-```math
-BRT = \text{End Time} - \text{Start Time}
-```
-
-- **Start Time**: Timestamp when the build begins
-- **End Time**: Timestamp when the build completes
-
-### Units:
-- Measured in **seconds** or **milliseconds** depending on the granularity
-
-A lower BRT is desirable and indicates a more efficient build configuration.
-
----
-
-
-## 9. Halstead Complexity Metric: Operator and Operand Definitions for Build Systems
-
-This document describes how **operators** and **operands** are identified for computing Halstead Complexity in three build systems: **Gradle**, **Maven**, and **Ant**.
-
-The authoritative implementation lives in [`metrics/halstead_volume.py`](/Users/aghammam/Desktop/BuildRefMiner/metrics/halstead_volume.py), with [`metrics/halstead_groovy_ast.groovy`](/Users/aghammam/Desktop/BuildRefMiner/metrics/halstead_groovy_ast.groovy) used as the Gradle/Groovy AST helper.
-
----
-
-### Gradle (Groovy DSL)
-
-- **Operators**: 
-  - Groovy method calls, including DSL entry points and nested DSL blocks such as `plugins {}`, `repositories {}`, `dependencies {}`, `task`, `register`, `named`, `implementation`, and `mavenCentral`
-  - Assignment, binary, unary, and ternary/elvis operators such as `=`, `==`, `!`, and `?:`
-  - Control-flow constructs such as `if`, `else`, `for`, `while`, `switch`, `case`, and `catch`
-
-- **Operands**:
-  - String, numeric, and boolean literals
-  - Variable identifiers referenced in expressions
-  - Property/member names referenced in expressions such as `project.version`, `rootProject.name`, and `sourceSets.main`
-  - Closure parameter names used in task and closure bodies
-  - Dependency coordinates, file paths, and URLs when they appear as string literals
-
-> **Note**: DSL blocks are counted through their underlying method calls, so the closure body itself is not counted as a separate operator. The Groovy AST is traversed to extract these nodes, making Gradle Halstead Volume an AST-based approximation of build-script logic rather than a plain-text token count.
-
----
-
-### Maven (XML-based POM)
-
-- **Operators**:
-  - All XML tags, such as `<project>`, `<build>`, `<plugin>`, `<execution>`, etc.
-
-- **Operands**:
-  - All child XML tags of the operator tags
-  - Example: in `<plugin><artifactId>maven-compiler-plugin</artifactId></plugin>`, `<plugin>` is an operator and `<artifactId>` is an operand
-
-> **Note**: This follows the McIntosh et al. definition used in the repo: every Maven XML tag is counted as an operator, and child XML tags are counted as operands.
-
----
-
-### Ant (XML-based)
-
-- **Operators**:
-  - Ant target and task tags, such as `<target>`, `<property>`, `<mkdir>`, `<javac>`, `<delete>`, and `<echo>`
-  - The root `<project>` tag and `<description>` are excluded from the repo's implementation
-
-- **Operands**:
-  - Parameter names passed to target or task tags
-  - The `name` parameter of `<target>` is excluded
-
-> **Example**: In `<javac srcdir="${src.dir}" destdir="${build.dir}"/>`, `javac` is an operator and `srcdir`, `destdir` are operands.
-
-> **Note**: This follows the McIntosh et al. definition adapted in the repo: ANT targets and tasks are operators, while their parameters are operands, excluding the target `name` parameter.
-
----
-
-### Formula (All Build Systems)
-
-The Halstead Volume is calculated as:
-
-```
-n1 = number of unique operators
-n2 = number of unique operands
-N1 = total number of operators
-N2 = total number of operands
-
-Vocabulary = n1 + n2
-Length     = N1 + N2
-Volume     = Length * log2(Vocabulary)
-```
-
----
+`BDS` is intentionally not folded into `RM` in the current pipeline; it remains a separate determinism attribute.
