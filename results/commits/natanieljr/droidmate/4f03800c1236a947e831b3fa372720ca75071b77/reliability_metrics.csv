@@ -1,0 +1,7 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,RE_Before,RE_After,DSS_Before,DSS_After,EDR_Before,EDR_After
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,build.gradle,build.gradle,Gradle,modified,0.9872,0.9873,0.3333,0.3333,0.9375,0.9375
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,buildSrc/build.gradle,build.gradle,Gradle,modified,0.9375,0.9348,0.2857,0.2857,1.0,1.0
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,project/deviceComponents/deviceControlDaemon/build.gradle,build.gradle,Gradle,modified,0.9508,0.9516,0.875,0.875,0.96,0.96
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,project/deviceComponents/deviceControlDaemon/settings.gradle,settings.gradle,Gradle,modified,0.6154,0.5455,0.0,0.0,0.0,0.0
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,project/pcComponents/core/build.gradle,build.gradle,Gradle,modified,0.9048,0.9062,0.9524,0.9524,0.9556,0.9565
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,versions.gradle,versions.gradle,Gradle,modified,1.0,1.0,0.0,0.0,0.0,0.0

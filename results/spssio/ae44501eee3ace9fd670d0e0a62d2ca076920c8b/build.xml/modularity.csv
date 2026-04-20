@@ -1,0 +1,2 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,CP_Internal_Before,CP_Internal_After,CP_External_Before,CP_External_After,NCP_Internal_Before,NCP_Internal_After,NCP_External_Before,NCP_External_After,Build_Cohesion_Before,Build_Cohesion_After,Clone_Density_Before,Clone_Density_After
+ae44501eee3ace9fd670d0e0a62d2ca076920c8b,7ae55f5a9ffb3e40b3f08382fa5f74c9693e06e9,build.xml,build.xml,Ant,modified,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.264,0.386

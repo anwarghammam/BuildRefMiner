@@ -1,5 +1,6 @@
 import os
 import json
+import ssl
 import tempfile
 import urllib.request
 import urllib.error
@@ -8,16 +9,11 @@ from functools import lru_cache
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
-BUILD_PATHS = {
-    "FilesExamples/build.xml",
-    "FilesExamples/pom.xml",
-    "FilesExamples/build.gradle",
-    "FilesExamples/build.gradle.kts",
-    "FilesExamples/TestScript.groovy",
-    "FilesExamples/gradle_multi/settings.gradle",
-    "FilesExamples/gradle_multi/app/build.gradle",
-    "FilesExamples/gradle_multi/core/build.gradle",
-    "FilesExamples/gradle_multi/lib/build.gradle",
+BUILD_FILENAMES = {
+    "pom.xml",
+    "build.xml",
+    "settings.gradle",
+    "settings.gradle.kts",
 }
 
 
@@ -26,7 +22,15 @@ def normalize_path(path: str) -> str:
 
 
 def is_target_build_file(path: str) -> bool:
-    return normalize_path(path) in BUILD_PATHS
+    normalized = normalize_path(path).strip().lower()
+    if not normalized:
+        return False
+
+    name = os.path.basename(normalized)
+    if name in BUILD_FILENAMES:
+        return True
+
+    return normalized.endswith(".gradle") or normalized.endswith(".gradle.kts")
 
 
 def _with_query(url: str, **params) -> str:
@@ -34,6 +38,52 @@ def _with_query(url: str, **params) -> str:
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     query.update({k: v for k, v in params.items() if v is not None})
     return urlunsplit(parsed._replace(query=urlencode(query)))
+
+
+def _candidate_ca_bundle_paths() -> list[str]:
+    candidates = [
+        os.environ.get("BUILDREFMINER_CA_BUNDLE", ""),
+        os.environ.get("SSL_CERT_FILE", ""),
+        os.environ.get("REQUESTS_CA_BUNDLE", ""),
+    ]
+
+    try:
+        import certifi  # type: ignore
+
+        candidates.append(certifi.where())
+    except Exception:
+        pass
+
+    return [path for path in candidates if path and os.path.exists(path)]
+
+
+def _build_ssl_context() -> ssl.SSLContext:
+    for cafile in _candidate_ca_bundle_paths():
+        try:
+            return ssl.create_default_context(cafile=cafile)
+        except Exception:
+            continue
+
+    return ssl.create_default_context()
+
+
+def _read_response_text(response) -> str:
+    encoding = response.headers.get_content_charset() or "utf-8"
+    return response.read().decode(encoding)
+
+
+def _ssl_help_message() -> str:
+    return (
+        "SSL certificate verification failed while calling GitHub.\n"
+        "BuildRefMiner now tries the system CA store, BUILDREFMINER_CA_BUNDLE, "
+        "SSL_CERT_FILE, REQUESTS_CA_BUNDLE, and certifi when installed.\n"
+        "Next steps:\n"
+        "1. Install/update certifi: pip install -U certifi\n"
+        "2. Or set a CA bundle explicitly:\n"
+        "   export SSL_CERT_FILE=$(python3 -c 'import certifi; print(certifi.where())')\n"
+        "3. On macOS Python.org builds, you may also need to run "
+        "\"Install Certificates.command\"."
+    )
 
 
 @lru_cache(maxsize=2048)
@@ -46,10 +96,11 @@ def github_get_json(url: str, token: str):
     }
 
     req = urllib.request.Request(url, headers=headers)
+    context = _build_ssl_context()
 
     try:
-        with urllib.request.urlopen(req) as response:
-            return json.loads(response.read().decode("utf-8"))
+        with urllib.request.urlopen(req, context=context, timeout=30) as response:
+            return json.loads(_read_response_text(response))
     except urllib.error.HTTPError as e:
         error_body = ""
         try:
@@ -63,6 +114,11 @@ def github_get_json(url: str, token: str):
             f"HTTP Status: {e.code}\n"
             f"Response: {error_body}"
         )
+    except urllib.error.URLError as e:
+        reason = getattr(e, "reason", e)
+        if isinstance(reason, ssl.SSLCertVerificationError):
+            raise RuntimeError(_ssl_help_message()) from e
+        raise RuntimeError(f"GitHub API request failed.\nURL: {url}\nReason: {reason}") from e
 
 
 def get_commit_payload(owner: str, repo: str, commit_sha: str, token: str) -> dict:
@@ -114,6 +170,34 @@ def get_changed_build_files(owner: str, repo: str, commit_sha: str, token: str) 
         })
 
     return changed
+
+
+@lru_cache(maxsize=2048)
+def get_build_files_at_commit(owner: str, repo: str, commit_sha: str, token: str) -> tuple[str, ...]:
+    payload = get_commit_payload(owner, repo, commit_sha, token)
+    tree_sha = (
+        payload.get("commit", {})
+        .get("tree", {})
+        .get("sha", "")
+    )
+
+    if not tree_sha:
+        return ()
+
+    url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1"
+    tree_payload = github_get_json(url, token)
+    tree_items = tree_payload.get("tree", []) if isinstance(tree_payload, dict) else []
+
+    build_paths: list[str] = []
+    for item in tree_items:
+        if item.get("type") != "blob":
+            continue
+
+        path = normalize_path(item.get("path", ""))
+        if is_target_build_file(path):
+            build_paths.append(path)
+
+    return tuple(sorted(set(build_paths)))
 
 
 def github_get_json_paginated(url: str, token: str) -> list[dict]:
@@ -169,14 +253,22 @@ def get_file_content_at_commit(owner: str, repo: str, commit_sha: str, path: str
     }
 
     req = urllib.request.Request(url, headers=headers)
+    context = _build_ssl_context()
 
     try:
-        with urllib.request.urlopen(req) as response:
-            return response.read().decode("utf-8")
+        with urllib.request.urlopen(req, context=context, timeout=30) as response:
+            return _read_response_text(response)
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None
         print(f"[WARN] HTTP error fetching {path} at {commit_sha}: {e}")
+        return None
+    except urllib.error.URLError as e:
+        reason = getattr(e, "reason", e)
+        if isinstance(reason, ssl.SSLCertVerificationError):
+            print(f"[WARN] {_ssl_help_message()}")
+            return None
+        print(f"[WARN] Error fetching {path} at {commit_sha}: {reason}")
         return None
     except Exception as e:
         print(f"[WARN] Error fetching {path} at {commit_sha}: {e}")
@@ -249,12 +341,12 @@ def materialize_project_snapshot(
     repo: str,
     commit_sha: str,
     token: str,
-    build_paths: set[str] | None = None,
+    build_paths: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> str:
     if not commit_sha:
         return ""
 
-    build_paths = build_paths or BUILD_PATHS
+    build_paths = build_paths or get_build_files_at_commit(owner, repo, commit_sha, token)
     temp_dir = tempfile.mkdtemp(prefix="build_snapshot_")
 
     for rel_path in build_paths:

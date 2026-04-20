@@ -35,6 +35,19 @@ The before/after pipeline reports most metrics with paired fields:
 - `*_After`
 - `*_Delta` when a direct delta is meaningful
 
+When the GitHub commit runner is used, the pipeline also creates a per-commit output directory:
+- `results/commits/<commit_sha>/`
+
+That directory contains one CSV per focused view for the changed build files in that commit:
+- `summary_metrics.csv`
+- `maintainability_metrics.csv`
+- `understandability_metrics.csv`
+- `modularity_metrics.csv`
+- `security_metrics.csv`
+- `reliability_metrics.csv`
+
+Each CSV stores one row per changed build file in that commit, including the full `File_Path`, the `File_Name`, and the metrics for that quality view. The pipeline does not create separate per-file CSV folders inside the commit directory.
+
 The formulas below are written for a single build file `b`. The pipeline applies the same definitions to both snapshots.
 
 ### 1.2 Common Base Measures
@@ -46,7 +59,7 @@ Several quality attributes reuse the same base quantities.
 | `BLOC(b)` | Build lines of code for build file `b`. | Obtained from `scc` as the `Code` count for the file. |
 | `Lines(b)` | Total physical line count. | Obtained from `scc` as the `Lines` count. |
 | `CommentLines(b)` | Number of comment lines. | Obtained from `scc` as the `Comment` count. |
-| `NonEmptyLines(b)` | Number of non-blank lines. | Used in smell-density calculations; effectively line count after removing blank lines. |
+| `NonEmptyLines(b)` | Number of non-blank lines. | Available as an auxiliary line-count measure when blank-line filtering is needed. |
 
 ### 1.3 Scope Notes
 
@@ -61,13 +74,22 @@ Several quality attributes reuse the same base quantities.
 | Complexity | `BLOC`, `Cyclomatic_Complexity`, `Normalized_CC`, `Halstead_Volume`, `Normalized_HV` | none |
 | Dependency Quality | `Dependency_Count`, `Fixed_Dependency_Count`, `Dynamic_Dependency_Count`, `Snapshot_Dependency_Count`, `Unknown_Dependency_Count` | `DSS` |
 | Determinism and Reproducibility | `Non_Deterministic_Constructs`, `Non_Deterministic_Summary` | `BDS` |
-| Understandability | `Style_Conformance_Score`, `Comment_Ratio`, `Comment_Readability`, `Normalized_CC`, `Normalized_HV` | methodology-level `US` |
-| Maintainability | `Style_Conformance_Score`, `Comment_Ratio`, `Comment_Readability`, `Clone_Density`, `Maintainability_Smell_Count`, `Maintainability_Smell_Density`, `Maintainability_Smell_Summary` | none |
+| Understandability | `Style_Conformance_Score`, `Comment_Ratio`, `Comment_Readability`, `Normalized_CC`, `Normalized_HV`, `Clone_Density` | methodology-level `US` |
+| Maintainability | `BLOC`, `Cyclomatic_Complexity`, `Normalized_CC`, `Halstead_Volume`, `Normalized_HV`, `Clone_Density`, `Maintainability_Smell_Count`, `Maintainability_Smell_Density`, `Maintainability_Smell_Summary` | methodology-level `Maintainability` |
 | Coupling and Cohesion | `CP_Internal`, `CP_External`, `CP_Total`, `NCP_Internal`, `NCP_External`, `Coupling_Ratio`, `Build_Cohesion` | `EDR` reuses coupling components |
-| Modularity | `Build_Cohesion`, `Coupling_Ratio`, `NCP_External` | methodology-level `MS` |
+| Modularity | `CP_Internal`, `CP_External`, `NCP_Internal`, `NCP_External`, `Build_Cohesion`, `Clone_Density` | methodology-level `MS`; focused `modularity_metrics.csv` export |
 | Evolution and Change Activity | `Churn`, `Change_Frequency`, `Avg_Logical_LOC`, `Normalized_Churn`, `Normalized_Change_Frequency` | none |
-| Security | `Security_Smell_Count`, `Security_Smell_Density`, `Security_Smell_Summary` | methodology-level `SS` |
-| Reliability | `Reliability_Issues` | `RE`, `RM` |
+| Security | `Security_Smell_Count`, `Security_Smell_Density`, `Security_Smell_Summary`, `HARDCODED_CREDENTIALS`, `INSECURE_URLS`, `WILDCARD_USAGE`, `HARDCODED_PATHS_AND_URLS`, `DEPRECATED_DEPENDENCIES`, `OUTDATED_DEPENDENCIES` | focused `security_metrics.csv` export |
+| Reliability | `RE`, `DSS`, `EDR` | focused `reliability_metrics.csv` export |
+
+`Style_Conformance_Score` is a normalized metric in the `0..1` range:
+
+```text
+Style_Conformance_Score(b) = max(0, 1 - (violations(b) / BLOC(b)))
+```
+
+The pipeline also emits a focused understandability output file:
+- `results/understandability_metrics.csv`
 
 ## 3. Complexity
 
@@ -208,9 +230,17 @@ The current detector is text-based and scans the file contents for the construct
 
 ## 6. Maintainability
 
-Maintainability captures how easy a build script is to read, diagnose, update, and evolve.
+Maintainability captures how easy a build script is to inspect, modify, and evolve without introducing extra effort or breakage.
 
-No single aggregate maintainability score is currently emitted by the pipeline. However, the attribute can be operationalized from the low-level metrics below.
+For maintainability, this project now considers only:
+- `BLOC`
+- `Cyclomatic_Complexity`
+- `Halstead_Volume`
+- `Clone_Density`
+- maintainability smells
+
+The pipeline also emits a maintainability-focused output file:
+- `results/maintainability_metrics.csv`
 
 ### 6.0 Attribute-Level Formula
 
@@ -219,61 +249,55 @@ A maintainability score can be expressed as:
 ```text
 Maintainability(b) =
 (
-  1 / (1 + Normalized_CC(b))
+  1 / (1 + BLOC(b))
+  + 1 / (1 + Normalized_CC(b))
   + 1 / (1 + Normalized_HV(b))
-  + SCS(b) / 100
-  + CR(b)
-  + clamp(FRE(b), 0, 100) / 100
   + (1 - Clone_Density(b))
-  + 1 / (1 + MSD(b) / 1000)
-) / 7
+  + (1 - MSD(b))
+) / 5
 ```
 
 Where:
-- `SCS(b)` = `Style_Conformance_Score`
-- `CR(b)` = `Comment_Ratio`
-- `FRE(b)` = `Comment_Readability`
+- `Normalized_CC(b)` = `Cyclomatic_Complexity(b) / BLOC(b)`
+- `Normalized_HV(b)` = `Halstead_Volume(b) / BLOC(b)`
 - `MSD(b)` = `Maintainability_Smell_Density`
 
-This formulation keeps all components in the `0..1` range before averaging:
-- lower complexity and lower volume increase maintainability through `1 / (1 + x)`
-- higher style conformance, richer documentation, and better readability increase maintainability
-- higher duplication and higher smell density reduce maintainability
+Interpretation:
+- lower build size, lower control-flow complexity, and lower Halstead volume increase maintainability
+- higher duplication reduces maintainability through `1 - Clone_Density(b)`
+- higher smell density reduces maintainability through inverse normalization
 
-### 6.1 Documentation and Style Metrics
-
-| Metric | Definition | Formula |
-|---|---|---|
-| `Comment_Ratio` | Share of comment lines in the file. | `Comment_Ratio(b) = CommentLines(b) / Lines(b)` |
-| `Comment_Readability` | Readability of extracted comments measured with Flesch Reading Ease. | `FRE = 206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)` |
-| `Style_Conformance_Score` | Degree to which the file satisfies style rules. | `SCS(b) = max(0, 100 - ((violations / BLOC(b)) * 100))` |
-
-Gradle Groovy style uses weighted CodeNarc priorities:
-
-```text
-weighted_violations = 5 * P1 + 3 * P2 + P3
-SCS = max(0, 100 - ((weighted_violations / BLOC) * 100))
-```
-
-Kotlin DSL, Maven, and Ant use their respective violation totals directly in the same normalization formula.
-
-### 6.2 Duplication Metric
+### 6.1 Core Maintainability Metrics
 
 | Metric | Definition | Formula |
 |---|---|---|
+| `BLOC` | Build lines of code. | `BLOC(b) = code_lines(b)` |
+| `Cyclomatic_Complexity` | File-level decision or build-logic complexity. | Build-system-specific calculation described in Section 3.2. |
+| `Normalized_CC` | Size-normalized cyclomatic complexity used in the maintainability CSV. | `Normalized_CC(b) = Cyclomatic_Complexity(b) / BLOC(b)` |
+| `Halstead_Volume` | Halstead volume of the build script. | `HV(b) = (N1 + N2) * log2(n1 + n2)` |
+| `Normalized_HV` | Size-normalized Halstead volume used in the maintainability CSV. | `Normalized_HV(b) = Halstead_Volume(b) / BLOC(b)` |
 | `Clone_Density` | Fraction of duplicated build logic lines. | `Clone_Density(b) = duplicated_build_logic_lines(b) / BLOC(b)` |
 
-### 6.3 Maintainability Smell Metrics
+### 6.2 Maintainability Smell Metrics
 
 | Metric | Definition | Formula |
 |---|---|---|
 | `Maintainability_Smell_Count` | Number of maintainability smell findings. | Count of detected maintainability smells. |
-| `Maintainability_Smell_Density` | Smell density normalized per 1000 non-empty lines. | `Maintainability_Smell_Density(b) = (Maintainability_Smell_Count(b) / NonEmptyLines(b)) * 1000` |
+| `Maintainability_Smell_Density` | Smell density normalized by build lines of code. | `Maintainability_Smell_Density(b) = Maintainability_Smell_Count(b) / BLOC(b)` |
 | `Maintainability_Smell_Summary` | Set of maintainability smell categories present. | Semicolon-separated set of smell identifiers. |
 
+The maintainability-focused CSV includes:
+- `BLOC_Before` and `BLOC_After`
+- `Cyclomatic_Complexity_Before` and `Cyclomatic_Complexity_After`
+- `Normalized_CC_Before` and `Normalized_CC_After`
+- `Halstead_Volume_Before` and `Halstead_Volume_After`
+- `Normalized_HV_Before` and `Normalized_HV_After`
+- `Clone_Density_Before` and `Clone_Density_After`
+- `Maintainability_Smell_Count_Before` and `Maintainability_Smell_Count_After`
+- `Maintainability_Smell_Density_Before` and `Maintainability_Smell_Density_After`
+- `Maintainability_Smell_Summary_Before` and `Maintainability_Smell_Summary_After`
+
 Tracked maintainability smell categories:
-- `COMPLEXITY`
-- `DUPLICATES`
 - `EMPTY_INCOMPLETE_TAGS`
 - `INCONSISTENT_DEPENDENCY_MANAGEMENT`
 - `LACK_OF_ERROR_HANDLING`
@@ -282,50 +306,11 @@ Tracked maintainability smell categories:
 - `DEPRECATED_DEPENDENCIES`
 - `OUTDATED_DEPENDENCIES`
 
-### 6.4 Calculation Notes
+### 6.3 Calculation Notes
 
-#### Comment Readability
-
-- Gradle comment readability is computed from extracted `// ...` and `/* ... */` comments.
-- Maven and Ant comment readability are computed from extracted `<!-- ... -->` comments.
-- The extracted text is normalized before applying the Flesch Reading Ease formula.
-
-#### Style Conformance
-
-- Gradle Groovy style conformance is derived from CodeNarc findings.
-- Gradle Kotlin DSL style conformance is derived from detekt findings.
-- Maven and Ant style conformance are derived from custom XML style checks.
-
-#### Clone Density
-
-- Gradle and Kotlin DSL files are analyzed with PMD CPD using Groovy or Kotlin tokenization when available.
-- Maven and Ant files are analyzed with PMD CPD in XML mode when available.
-- A repeated-line-window fallback is used when the preferred duplication path is unavailable.
-
-### 6.5 Understandability Formula
-
-Understandability is not exported as a standalone pipeline field, but it can be operationalized from the documentation, style, and complexity measures already computed:
-
-```text
-US(b) =
-(
-  SCS(b) / 100
-  + CR(b)
-  + clamp(FRE(b), 0, 100) / 100
-  + 1 / (1 + Normalized_CC(b))
-  + 1 / (1 + Normalized_HV(b))
-) / 5
-```
-
-Where:
-- `US(b)` = understandability score
-- `SCS(b)` = `Style_Conformance_Score`
-- `CR(b)` = `Comment_Ratio`
-- `FRE(b)` = `Comment_Readability`
-
-Interpretation:
-- higher style conformance, clearer comments, and lower structural complexity increase understandability
-- higher normalized complexity and higher normalized Halstead volume reduce understandability
+- `BLOC`, `Cyclomatic_Complexity`, and `Halstead_Volume` reuse the definitions from Section 3.
+- `Clone_Density` is computed with PMD CPD when available, with a repeated-line-window fallback when the preferred duplication path is unavailable.
+- Maintainability smells are counted without weighting; each finding contributes equally to the smell count.
 
 ## 7. Coupling and Cohesion
 
@@ -374,7 +359,8 @@ MS(b) =
   Build_Cohesion(b)
   + (1 - Coupling_Ratio(b))
   + 1 / (1 + NCP_External(b))
-) / 3
+  + (1 - Clone_Density(b))
+) / 4
 ```
 
 Where:
@@ -382,9 +368,21 @@ Where:
 - `Build_Cohesion(b)` rewards stronger internal relatedness of build elements
 - `1 - Coupling_Ratio(b)` rewards a lower proportion of external coupling
 - `1 / (1 + NCP_External(b))` rewards lower size-normalized external coupling
+- `1 - Clone_Density(b)` rewards lower duplication across build logic
 
 Interpretation:
-- higher cohesion and lower external coupling indicate stronger modularity
+- higher cohesion, lower external coupling, and lower duplication indicate stronger modularity
+
+The pipeline also emits a focused modularity output file with the separately tracked low-level metrics:
+- `results/modularity_metrics.csv`
+
+The modularity-focused CSV includes:
+- `CP_Internal_Before` and `CP_Internal_After`
+- `CP_External_Before` and `CP_External_After`
+- `NCP_Internal_Before` and `NCP_Internal_After`
+- `NCP_External_Before` and `NCP_External_After`
+- `Build_Cohesion_Before` and `Build_Cohesion_After`
+- `Clone_Density_Before` and `Clone_Density_After`
 
 ## 8. Evolution and Change Activity
 
@@ -411,19 +409,19 @@ Security is characterized through smell-based indicators rather than a single ag
 A security score can be operationalized directly from the security smell density:
 
 ```text
-SS(b) = max(0, 1 - (Security_Smell_Count(b) / max(NonEmptyLines(b), 1)))
+SS(b) = max(0, 1 - (Security_Smell_Count(b) / max(BLOC(b), 1)))
 ```
 
 Equivalently, using the documented density metric:
 
 ```text
-SS(b) = max(0, 1 - (Security_Smell_Density(b) / 1000))
+SS(b) = max(0, 1 - Security_Smell_Density(b))
 ```
 
 Where:
 - `SS(b)` = security score
 - `Security_Smell_Count(b)` counts security smell findings
-- `Security_Smell_Density(b)` normalizes those findings per 1000 non-empty lines
+- `Security_Smell_Density(b)` normalizes those findings by build lines of code
 
 Interpretation:
 - more security smells imply lower security
@@ -433,7 +431,7 @@ Interpretation:
 | Metric | Definition | Formula |
 |---|---|---|
 | `Security_Smell_Count` | Number of detected security smell findings. | Count of detected security smells. |
-| `Security_Smell_Density` | Security smell density normalized per 1000 non-empty lines. | `Security_Smell_Density(b) = (Security_Smell_Count(b) / NonEmptyLines(b)) * 1000` |
+| `Security_Smell_Density` | Security smell density normalized by build lines of code. | `Security_Smell_Density(b) = Security_Smell_Count(b) / BLOC(b)` |
 | `Security_Smell_Summary` | Set of security smell categories present. | Semicolon-separated set of smell identifiers. |
 
 Tracked security smell categories:
@@ -441,6 +439,22 @@ Tracked security smell categories:
 - `INSECURE_URLS`
 - `WILDCARD_USAGE`
 - `HARDCODED_PATHS_AND_URLS`
+- `DEPRECATED_DEPENDENCIES`
+- `OUTDATED_DEPENDENCIES`
+
+The pipeline also emits a focused security output file:
+- `results/security_metrics.csv`
+
+The security-focused CSV includes:
+- `Before_Security_Smell_Count` and `After_Security_Smell_Count`
+- `Before_Security_Smell_Density` and `After_Security_Smell_Density`
+- `Before_Security_Smell_Summary` and `After_Security_Smell_Summary`
+- `Before_HARDCODED_CREDENTIALS` and `After_HARDCODED_CREDENTIALS`
+- `Before_INSECURE_URLS` and `After_INSECURE_URLS`
+- `Before_WILDCARD_USAGE` and `After_WILDCARD_USAGE`
+- `Before_HARDCODED_PATHS_AND_URLS` and `After_HARDCODED_PATHS_AND_URLS`
+- `Before_DEPRECATED_DEPENDENCIES` and `After_DEPRECATED_DEPENDENCIES`
+- `Before_OUTDATED_DEPENDENCIES` and `After_OUTDATED_DEPENDENCIES`
 
 ## 10. Reliability
 
@@ -468,6 +482,14 @@ Where:
 - higher `RE` means fewer reliability issues per build line
 - higher `DSS` means a larger share of dependencies are pinned to fixed versions
 - lower `EDR` means less reliance on external systems
+
+The pipeline also emits a focused reliability output file:
+- `results/reliability_metrics.csv`
+
+The reliability-focused CSV includes:
+- `RE_Before` and `RE_After`
+- `DSS_Before` and `DSS_After`
+- `EDR_Before` and `EDR_After`
 - higher `RM` therefore indicates a more reliable build file overall
 
 ### 10.3 Attribute-Level Formula

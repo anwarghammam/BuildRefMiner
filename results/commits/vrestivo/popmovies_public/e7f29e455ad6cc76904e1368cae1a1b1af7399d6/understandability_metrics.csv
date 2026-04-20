@@ -1,0 +1,2 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,Normalized_CC_Before,Normalized_CC_After,Normalized_HV_Before,Normalized_HV_After,Comment_Ratio_Before,Comment_Ratio_After,Comment_Readability_Before,Comment_Readability_After,Style_Conformance_Score_Before,Style_Conformance_Score_After,Clone_Density_Before,Clone_Density_After
+e7f29e455ad6cc76904e1368cae1a1b1af7399d6,48d1446a804724e287264a47f796d92617a22d7c,app/build.gradle,build.gradle,Gradle,modified,0.0192,0.0192,48.6163,48.6163,0.0897,0.0897,-1.25,-1.25,1.0,1.0,0.0,0.0

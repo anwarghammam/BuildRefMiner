@@ -1,0 +1,2 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,Normalized_CC_Before,Normalized_CC_After,Normalized_HV_Before,Normalized_HV_After,Comment_Ratio_Before,Comment_Ratio_After,Comment_Readability_Before,Comment_Readability_After,Style_Conformance_Score_Before,Style_Conformance_Score_After,Clone_Density_Before,Clone_Density_After
+1c21bde52c98c96f56d6508b3e00305fd656ce06,6ab16830c2798e418e573e80c1e4b1ba9ff81bc5,speechrecognitionview/build.gradle,build.gradle,Gradle,modified,0.0769,0.0909,39.8677,38.2445,0.0,0.0,0.0,0.0,1.0,1.0,0.0,0.0

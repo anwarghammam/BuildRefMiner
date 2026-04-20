@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -16,22 +17,42 @@ SMELL_LABELS: dict[str, str] = {
     "INSECURE_URLS": "Insecure URLs",
     "WILDCARD_USAGE": "Wildcard Usage",
     "HARDCODED_PATHS_AND_URLS": "Hardcoded Paths/URLs",
+    "DEPRECATED_DEPENDENCIES": "Deprecated Dependencies",
+    "OUTDATED_DEPENDENCIES": "Outdated Dependencies",
 }
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+TOOLS_DIR = SCRIPT_DIR.parent
+REPO_ROOT = TOOLS_DIR.parent
+
+for path in (SCRIPT_DIR, TOOLS_DIR, REPO_ROOT):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
+
+
+def _import_secure_linter_module(module_name: str):
+    if __package__:
+        return importlib.import_module(f"{__package__}.{module_name}")
+    return importlib.import_module(module_name)
 
 
 def _checks_for_build_type(build_type: str) -> list[tuple[str, CheckFn]]:
     if build_type == "ant":
-        from . import ant_security_checks as ant_checks
+        ant_checks = _import_secure_linter_module("ant_security_checks")
+        ant_maintainability_checks = _import_secure_linter_module("ant_maintainability_checks")
 
         return [
             ("HARDCODED_CREDENTIALS", ant_checks.check_hardcoded_credentials),
             ("INSECURE_URLS", ant_checks.check_insecure_urls),
             ("WILDCARD_USAGE", ant_checks.check_wildcard_usage),
             ("HARDCODED_PATHS_AND_URLS", ant_checks.check_hardcoded_paths_and_urls),
+            ("DEPRECATED_DEPENDENCIES", ant_maintainability_checks.check_deprecated_dependencies),
+            ("OUTDATED_DEPENDENCIES", ant_maintainability_checks.check_outdated_dependencies),
         ]
 
     if build_type == "gradle":
-        from . import gradle_security_checks as gradle_checks
+        gradle_checks = _import_secure_linter_module("gradle_security_checks")
 
         return [
             ("HARDCODED_CREDENTIALS", gradle_checks.check_hardcoded_credentials),
@@ -40,16 +61,20 @@ def _checks_for_build_type(build_type: str) -> list[tuple[str, CheckFn]]:
             ("WILDCARD_USAGE", gradle_checks.check_wildcard_usage),
             ("WILDCARD_USAGE", gradle_checks.check_wildcard_version_ranges),
             ("HARDCODED_PATHS_AND_URLS", gradle_checks.check_hardcoded_paths_and_urls),
+            ("DEPRECATED_DEPENDENCIES", gradle_checks.check_deprecated_dependencies),
+            ("OUTDATED_DEPENDENCIES", gradle_checks.check_outdated_dependencies),
         ]
 
     if build_type == "maven":
-        from . import maven_security_checks as maven_checks
+        maven_checks = _import_secure_linter_module("maven_security_checks")
 
         return [
             ("HARDCODED_CREDENTIALS", maven_checks.check_hardcoded_credentials),
             ("INSECURE_URLS", maven_checks.check_insecure_urls),
             ("WILDCARD_USAGE", maven_checks.check_wildcard_version_ranges),
             ("HARDCODED_PATHS_AND_URLS", maven_checks.check_hardcoded_paths_and_urls),
+            ("DEPRECATED_DEPENDENCIES", maven_checks.check_deprecated_dependencies),
+            ("OUTDATED_DEPENDENCIES", maven_checks.check_outdated_dependencies),
         ]
 
     raise ValueError(f"Unsupported build type: {build_type!r}")
@@ -67,7 +92,7 @@ def detect_build_type(file_path: str) -> str:
         return "maven"
 
     if name.endswith(".xml"):
-        from .maven_parser import parse_pom
+        parse_pom = _import_secure_linter_module("maven_parser").parse_pom
 
         root = parse_pom(str(path))
         if root is not None and "maven.apache.org/POM" in str(root.tag):
@@ -78,7 +103,7 @@ def detect_build_type(file_path: str) -> str:
 
 def _load_build_data(file_path: str, build_type: str) -> Any:
     if build_type == "ant":
-        from .ant_parser import parse_ant
+        parse_ant = _import_secure_linter_module("ant_parser").parse_ant
 
         data = parse_ant(file_path)
         if data is None:
@@ -86,12 +111,12 @@ def _load_build_data(file_path: str, build_type: str) -> Any:
         return data
 
     if build_type == "gradle":
-        from .gradle_parser import parse_gradle
+        parse_gradle = _import_secure_linter_module("gradle_parser").parse_gradle
 
         return parse_gradle(file_path)
 
     if build_type == "maven":
-        from .maven_parser import parse_pom
+        parse_pom = _import_secure_linter_module("maven_parser").parse_pom
 
         data = parse_pom(file_path)
         if data is None:
@@ -104,6 +129,19 @@ def _load_build_data(file_path: str, build_type: str) -> Any:
 def _count_non_empty_lines(file_path: str) -> int:
     with open(file_path, "r", encoding="utf-8", errors="ignore") as handle:
         return sum(1 for line in handle if line.strip())
+
+
+def _count_bloc(file_path: str) -> int:
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+
+        from metrics.BLOC import compute_bloc
+
+        return compute_bloc(file_path)
+    except Exception:
+        return _count_non_empty_lines(file_path)
 
 
 def _normalize_issue(smell_id: str, issue: dict[str, str]) -> dict[str, str]:
@@ -140,7 +178,7 @@ def _run_checks(data: Any, checks: list[tuple[str, CheckFn]]) -> list[dict[str, 
 
 
 def _format_result(file_path: str, build_type: str, smells: list[dict[str, str]]) -> dict[str, Any]:
-    loc = _count_non_empty_lines(file_path)
+    bloc = _count_bloc(file_path)
     smell_count = len(smells)
     smell_summary = ";".join(sorted({smell["smell_id"] for smell in smells}))
 
@@ -149,7 +187,7 @@ def _format_result(file_path: str, build_type: str, smells: list[dict[str, str]]
         "build_type": build_type,
         "smells": smells,
         "smell_count": smell_count,
-        "smell_density": round((smell_count / max(loc, 1)) * 1000, 4),
+        "smell_density": round(smell_count / max(bloc, 1), 4),
         "smell_summary": smell_summary,
     }
 

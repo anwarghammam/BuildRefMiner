@@ -1,0 +1,3 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,RE_Before,RE_After,DSS_Before,DSS_After,EDR_Before,EDR_After
+77bb3fc79952c18d3d8e5290b0f5ec8500bb7703,5f2555bed379cf40b66ac451adb9d86127dde3dc,app/build.gradle,build.gradle,Gradle,modified,0.9744,0.9888,0.9231,0.6087,1.0,1.0
+77bb3fc79952c18d3d8e5290b0f5ec8500bb7703,5f2555bed379cf40b66ac451adb9d86127dde3dc,build.gradle,build.gradle,Gradle,modified,0.9444,0.95,0.0,0.0,1.0,1.0

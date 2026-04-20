@@ -1,0 +1,5 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,RE_Before,RE_After,DSS_Before,DSS_After,EDR_Before,EDR_After
+3c3cbe3527bf79593c7b67e38f718e46e3b02528,6231655f961637701adc4672be2eed08e4cacef1,android/build.gradle,build.gradle,Gradle,modified,0.9722,0.9732,0.5,0.5,1.0,1.0
+3c3cbe3527bf79593c7b67e38f718e46e3b02528,6231655f961637701adc4672be2eed08e4cacef1,example/android/app/build.gradle,build.gradle,Gradle,modified,0.9559,0.9468,0.0,0.5,0.875,0.8667
+3c3cbe3527bf79593c7b67e38f718e46e3b02528,6231655f961637701adc4672be2eed08e4cacef1,example/android/build.gradle,build.gradle,Gradle,modified,1.0,0.975,0.0,0.0,1.0,1.0
+3c3cbe3527bf79593c7b67e38f718e46e3b02528,6231655f961637701adc4672be2eed08e4cacef1,example/android/settings.gradle,settings.gradle,Gradle,modified,1.0,1.0,0.0,0.0,0.0,0.0

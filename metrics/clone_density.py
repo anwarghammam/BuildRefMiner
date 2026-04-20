@@ -176,8 +176,20 @@ def compute_clone_density_with_pmd(file_path: str, min_tokens: int = DEFAULT_MIN
         )
 
         if result.returncode not in (0, 4, 5):
-            print("[WARN] PMD CPD failed:")
-            print(result.stderr.strip() or result.stdout.strip())
+            stderr_text = (result.stderr or "").strip()
+            stdout_text = (result.stdout or "").strip()
+            combined_output = stderr_text or stdout_text
+
+            if "GroovySyntaxError" in combined_output or "Unexpected character" in combined_output:
+                print(
+                    f"[WARN] PMD CPD could not parse {file_path}; "
+                    "falling back to heuristic clone detection."
+                )
+            elif combined_output:
+                first_line = combined_output.splitlines()[0]
+                print(f"[WARN] PMD CPD failed for {file_path}: {first_line}")
+            else:
+                print(f"[WARN] PMD CPD failed for {file_path}; falling back to heuristic clone detection.")
             return None
 
         cloned_lines_by_file = parse_cpd_csv(result.stdout)

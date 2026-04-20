@@ -2,11 +2,23 @@ from __future__ import annotations
 import re
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
-import requests
-from lxml import etree
 from functools import lru_cache
-import semantic_version
 version_cache={}
+
+try:
+    import requests
+except ImportError:
+    requests = None
+
+try:
+    from lxml import etree
+except ImportError:
+    etree = None
+
+try:
+    import semantic_version
+except ImportError:
+    semantic_version = None
 
 from common.version_utils import fetch_latest_version, is_version_outdated
 
@@ -53,6 +65,8 @@ MAVEN_SEARCH = "https://search.maven.org/solrsearch/select"
 _UA          = {"User-Agent": "secure‑linter/1.2 (+https://github.com/…)"}
 @lru_cache(maxsize=1024)                    # ❶ cache results (1 call per G/A)
 def _fetch_maven_metadata(group: str, artifact: str) -> Optional[Dict]:
+    if requests is None or etree is None:
+        return None
 
     params = {
         "q": f'g:"{group}" AND a:"{artifact}"',
@@ -69,7 +83,7 @@ def _fetch_maven_metadata(group: str, artifact: str) -> Optional[Dict]:
         docs = r.json().get("response", {}).get("docs", [])
         if docs:
             return docs[0]                    # has «timestamp» in ms
-    except requests.RequestException:
+    except Exception:
         pass                                  # fall through to XML fallback
 
     try:
@@ -249,6 +263,9 @@ def check_outdated_dependencies(gradle_data) -> List[Dict[str, str]]:
     return issues
 
 def get_latest_version_maven_central(group_id, artifact_id):
+    if requests is None:
+        return None
+
     key = f"{group_id}:{artifact_id}"
     if key in version_cache:
         return version_cache[key]
@@ -275,6 +292,8 @@ def get_latest_version_maven_central(group_id, artifact_id):
     return None
 
 def is_version_outdated(current_version, latest_version):
+    if semantic_version is None:
+        return False
     try:
         current = semantic_version.Version.coerce(current_version)
         latest = semantic_version.Version.coerce(latest_version)

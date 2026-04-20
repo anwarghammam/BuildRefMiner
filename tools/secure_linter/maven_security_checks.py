@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import requests
 from datetime import datetime, timedelta
 from typing import List, Dict, Set, Tuple, Optional
 
@@ -13,6 +12,11 @@ from lxml.etree import _Comment
 from common.version_utils import resilient_latest_version as _latest, \
                                  is_version_outdated
 
+try:
+    import requests
+except ImportError:
+    requests = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +24,9 @@ STALE_THRESHOLD = timedelta(days=365 * 2)
 MAVEN_API_URL = "https://search.maven.org/solrsearch/select"
 
 def _fetch_package_metadata(group: str, artifact: str) -> Optional[Dict]:
+    if requests is None:
+        return None
+
     params = {
         "q": f'g:"{group}" AND a:"{artifact}"',
         "rows": 1,
@@ -32,7 +39,7 @@ def _fetch_package_metadata(group: str, artifact: str) -> Optional[Dict]:
         resp.raise_for_status()
         docs = resp.json().get("response", {}).get("docs", [])
         return docs[0] if docs else None
-    except requests.RequestException as exc:
+    except Exception as exc:
         logger.warning("Could not fetch metadata for %s:%s – %s", group, artifact, exc)
         return None
 

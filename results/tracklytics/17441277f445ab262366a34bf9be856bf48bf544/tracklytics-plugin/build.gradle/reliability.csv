@@ -1,0 +1,2 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,RE_Before,RE_After,DSS_Before,DSS_After,EDR_Before,EDR_After
+17441277f445ab262366a34bf9be856bf48bf544,f44398f737e02ffd5ddeacd5d5ed0dce2abd5746,tracklytics-plugin/build.gradle,build.gradle,Gradle,modified,1.0,1.0,1.0,0.0,1.0,1.0

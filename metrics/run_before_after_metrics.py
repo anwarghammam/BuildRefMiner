@@ -1,10 +1,12 @@
 import os
 import sys
 import csv
+import io
 import shutil
 import argparse
 import types
 import importlib.util
+from urllib.parse import urlparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
@@ -28,8 +30,12 @@ from coupling import compute_build_coupling
 from dependency_stability import compute_dependency_stability
 from external_dependency_risk import compute_external_dependency_risk
 from build_determinism import compute_build_determinism
+from modularity_metrics import write_modularity_summary
 from reliability_issues import compute_reliability_issue_count, compute_reliability_score
+from reliability_metrics import write_reliability_summary
 from reliability_metric import compute_overall_reliability
+from security_metrics import write_security_summary
+from understandability_metrics import write_understandability_summary
 from github_commits_util import (
     get_changed_build_files,
     materialize_before_after_files,
@@ -45,6 +51,7 @@ from style_conformance import (
 
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "..", "results")
 SUMMARY_CSV = os.path.join(BASE_DIR, "..", "results", "summary_metrics.csv")
+MAINTAINABILITY_CSV = os.path.join(BASE_DIR, "..", "results", "maintainability_metrics.csv")
 
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
@@ -60,8 +67,6 @@ BUILD_TOOL_RULES = {
 }
 
 TRACKED_SMELLS = [
-    "COMPLEXITY",
-    "DUPLICATES",
     "EMPTY_INCOMPLETE_TAGS",
     "INCONSISTENT_DEPENDENCY_MANAGEMENT",
     "LACK_OF_ERROR_HANDLING",
@@ -146,7 +151,7 @@ def format_smell_result(file_path: str, build_type: str, smells: list[dict]) -> 
         "build_type": build_type,
         "smells": smells,
         "smell_count": smell_count,
-        "smell_density": round((smell_count / max(loc, 1)) * 1000, 4),
+        "smell_density": round(smell_count / max(loc, 1), 4),
         "smell_summary": smell_summary,
     }
 
@@ -349,10 +354,34 @@ def compute_build_coupling_for_snapshot(snapshot_path: str, project_dir: str, bl
             "ncp_external": 0.0,
             "coupling_ratio": 0.0,
         }
+    try:
+        return compute_build_coupling(snapshot_path, project_dir=project_dir, bloc=bloc)
+    except Exception as exc:
+        print(f"[WARN] Build coupling failed for {snapshot_path}: {exc}")
+        return {
+            "cp_internal": 0,
+            "cp_external": 0,
+            "cp_total": 0,
+            "ncp_internal": 0.0,
+            "ncp_external": 0.0,
+            "coupling_ratio": 0.0,
+        }
 
 
 def compute_dependency_stability_for_snapshot(snapshot_path: str) -> dict:
     if not snapshot_path or not os.path.exists(snapshot_path):
+        return {
+            "dependency_count": 0,
+            "fixed_dependency_count": 0,
+            "dynamic_dependency_count": 0,
+            "snapshot_dependency_count": 0,
+            "unknown_dependency_count": 0,
+            "dss": 0.0,
+        }
+    try:
+        return compute_dependency_stability(snapshot_path)
+    except Exception as exc:
+        print(f"[WARN] Dependency stability failed for {snapshot_path}: {exc}")
         return {
             "dependency_count": 0,
             "fixed_dependency_count": 0,
@@ -378,30 +407,6 @@ def compute_build_determinism_for_snapshot(snapshot_path: str, bloc: int) -> dic
             "non_deterministic_construct_count": 0,
             "non_deterministic_summary": "",
             "bds": 0.0,
-        }
-    try:
-        return compute_dependency_stability(snapshot_path)
-    except Exception as exc:
-        print(f"[WARN] Dependency stability failed for {snapshot_path}: {exc}")
-        return {
-            "dependency_count": 0,
-            "fixed_dependency_count": 0,
-            "dynamic_dependency_count": 0,
-            "snapshot_dependency_count": 0,
-            "unknown_dependency_count": 0,
-            "dss": 0.0,
-        }
-    try:
-        return compute_build_coupling(snapshot_path, project_dir=project_dir, bloc=bloc)
-    except Exception as exc:
-        print(f"[WARN] Build coupling failed for {snapshot_path}: {exc}")
-        return {
-            "cp_internal": 0,
-            "cp_external": 0,
-            "cp_total": 0,
-            "ncp_internal": 0.0,
-            "ncp_external": 0.0,
-            "coupling_ratio": 0.0,
         }
 
 
@@ -448,7 +453,11 @@ def flatten_smell_result(prefix: str, smell_result: dict, tracked_smells: list[s
     return row
 
 
-def write_summary(rows: list[dict]) -> None:
+def write_summary(
+    rows: list[dict],
+    output_path: str | None = None,
+    append: bool = True,
+) -> None:
     header = [
         "Commit_SHA",
         "Parent_SHA",
@@ -558,8 +567,6 @@ def write_summary(rows: list[dict]) -> None:
         "Introduced_Security_Smells",
         "Removed_Security_Smells",
 
-        "Before_COMPLEXITY",
-        "Before_DUPLICATES",
         "Before_EMPTY_INCOMPLETE_TAGS",
         "Before_INCONSISTENT_DEPENDENCY_MANAGEMENT",
         "Before_LACK_OF_ERROR_HANDLING",
@@ -568,8 +575,6 @@ def write_summary(rows: list[dict]) -> None:
         "Before_DEPRECATED_DEPENDENCIES",
         "Before_OUTDATED_DEPENDENCIES",
 
-        "After_COMPLEXITY",
-        "After_DUPLICATES",
         "After_EMPTY_INCOMPLETE_TAGS",
         "After_INCONSISTENT_DEPENDENCY_MANAGEMENT",
         "After_LACK_OF_ERROR_HANDLING",
@@ -587,21 +592,24 @@ def write_summary(rows: list[dict]) -> None:
         "After_HARDCODED_PATHS_AND_URLS",
     ]
 
-    file_exists = os.path.exists(SUMMARY_CSV)
-    write_header = True
-    mode = "a"
+    target_path = output_path or SUMMARY_CSV
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
-    if file_exists and os.path.getsize(SUMMARY_CSV) > 0:
-        with open(SUMMARY_CSV, "r", encoding="utf-8", newline="") as existing:
+    file_exists = os.path.exists(target_path)
+    write_header = True
+    mode = "a" if append else "w"
+
+    if append and file_exists and os.path.getsize(target_path) > 0:
+        with open(target_path, "r", encoding="utf-8", newline="") as existing:
             first_line = existing.readline().strip()
         expected_header = ",".join(header)
         if first_line == expected_header:
             write_header = False
         else:
-            print(f"[WARN] Rewriting {SUMMARY_CSV} to match updated smell columns.")
+            print(f"[WARN] Rewriting {target_path} to match updated smell columns.")
             mode = "w"
 
-    with open(SUMMARY_CSV, mode, newline="", encoding="utf-8") as f:
+    with open(target_path, mode, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=header)
 
         if write_header:
@@ -609,7 +617,151 @@ def write_summary(rows: list[dict]) -> None:
 
         writer.writerows(rows)
 
-    print(f"\nResults appended to: {SUMMARY_CSV}")
+    print(f"\nResults appended to: {target_path}")
+
+
+def maintainability_row_from_summary(row: dict) -> dict:
+    cc_before = row.get("Cyclomatic_Complexity_Before", 0) or 0
+    cc_after = row.get("Cyclomatic_Complexity_After", 0) or 0
+
+    return {
+        "Commit_SHA": row.get("Commit_SHA", ""),
+        "Parent_SHA": row.get("Parent_SHA", ""),
+        "File_Path": row.get("File_Path", ""),
+        "File_Name": row.get("File_Name", ""),
+        "Tool": row.get("Tool", ""),
+        "Status": row.get("Status", ""),
+        "BLOC_Before": row.get("BLOC_Before", 0),
+        "BLOC_After": row.get("BLOC_After", 0),
+        "Cyclomatic_Complexity_Before": cc_before,
+        "Cyclomatic_Complexity_After": cc_after,
+        "Normalized_CC_Before": row.get("Normalized_CC_Before", 0.0),
+        "Normalized_CC_After": row.get("Normalized_CC_After", 0.0),
+        "Halstead_Volume_Before": row.get("Halstead_Volume_Before", 0.0),
+        "Halstead_Volume_After": row.get("Halstead_Volume_After", 0.0),
+        "Normalized_HV_Before": row.get("Normalized_HV_Before", 0.0),
+        "Normalized_HV_After": row.get("Normalized_HV_After", 0.0),
+        "Clone_Density_Before": row.get("Clone_Density_Before", ""),
+        "Clone_Density_After": row.get("Clone_Density_After", ""),
+        "Maintainability_Smell_Count_Before": row.get("Before_Smell_Count", 0),
+        "Maintainability_Smell_Count_After": row.get("After_Smell_Count", 0),
+        "Maintainability_Smell_Density_Before": row.get("Before_Smell_Density", 0.0),
+        "Maintainability_Smell_Density_After": row.get("After_Smell_Density", 0.0),
+        "Maintainability_Smell_Summary_Before": row.get("Before_Smell_Summary", ""),
+        "Maintainability_Smell_Summary_After": row.get("After_Smell_Summary", ""),
+    }
+
+
+def write_maintainability_summary(
+    rows: list[dict],
+    output_path: str | None = None,
+    append: bool = True,
+) -> None:
+    header = [
+        "Commit_SHA",
+        "Parent_SHA",
+        "File_Path",
+        "File_Name",
+        "Tool",
+        "Status",
+        "BLOC_Before",
+        "BLOC_After",
+        "Cyclomatic_Complexity_Before",
+        "Cyclomatic_Complexity_After",
+        "Normalized_CC_Before",
+        "Normalized_CC_After",
+        "Halstead_Volume_Before",
+        "Halstead_Volume_After",
+        "Normalized_HV_Before",
+        "Normalized_HV_After",
+        "Clone_Density_Before",
+        "Clone_Density_After",
+        "Maintainability_Smell_Count_Before",
+        "Maintainability_Smell_Count_After",
+        "Maintainability_Smell_Density_Before",
+        "Maintainability_Smell_Density_After",
+        "Maintainability_Smell_Summary_Before",
+        "Maintainability_Smell_Summary_After",
+    ]
+
+    maintainability_rows = [maintainability_row_from_summary(row) for row in rows]
+    target_path = output_path or MAINTAINABILITY_CSV
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+    file_exists = os.path.exists(target_path)
+    write_header = True
+    mode = "a" if append else "w"
+
+    if append and file_exists and os.path.getsize(target_path) > 0:
+        with open(target_path, "r", encoding="utf-8", newline="") as existing:
+            first_line = existing.readline().strip()
+        expected_header = ",".join(header)
+        if first_line == expected_header:
+            write_header = False
+        else:
+            print(f"[WARN] Rewriting {target_path} to match updated maintainability columns.")
+            mode = "w"
+
+    with open(target_path, mode, newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+
+        if write_header:
+            writer.writeheader()
+
+        writer.writerows(maintainability_rows)
+
+    print(f"Maintainability results appended to: {target_path}")
+
+
+def commit_output_dir(owner: str, repo: str, commit_sha: str) -> str:
+    return os.path.join(OUTPUT_FOLDER, "commits", commit_sha)
+
+
+def remove_legacy_commit_subdirectories(target_dir: str) -> None:
+    if not os.path.isdir(target_dir):
+        return
+
+    for entry in os.scandir(target_dir):
+        if entry.is_dir():
+            shutil.rmtree(entry.path, ignore_errors=True)
+
+
+def write_commit_csv_bundle(owner: str, repo: str, commit_sha: str, rows: list[dict]) -> None:
+    commit_rows = [row for row in rows if row.get("File_Path") != "__COMMIT_TOTAL__"]
+    target_dir = commit_output_dir(owner, repo, commit_sha)
+    os.makedirs(target_dir, exist_ok=True)
+    remove_legacy_commit_subdirectories(target_dir)
+
+    write_summary(
+        commit_rows,
+        output_path=os.path.join(target_dir, "summary_metrics.csv"),
+        append=False,
+    )
+    write_maintainability_summary(
+        commit_rows,
+        output_path=os.path.join(target_dir, "maintainability_metrics.csv"),
+        append=False,
+    )
+    write_modularity_summary(
+        commit_rows,
+        output_path=os.path.join(target_dir, "modularity_metrics.csv"),
+        append=False,
+    )
+    write_reliability_summary(
+        commit_rows,
+        output_path=os.path.join(target_dir, "reliability_metrics.csv"),
+        append=False,
+    )
+    write_security_summary(
+        commit_rows,
+        output_path=os.path.join(target_dir, "security_metrics.csv"),
+        append=False,
+    )
+    write_understandability_summary(
+        commit_rows,
+        output_path=os.path.join(target_dir, "understandability_metrics.csv"),
+        append=False,
+    )
 
 
 def cleanup_temp_files(*paths):
@@ -628,45 +780,107 @@ def canonicalize_column_name(name: str) -> str:
     return (name or "").strip().lower().replace("-", "_").replace(" ", "_")
 
 
+def first_matching_column(field_map: dict[str, str], aliases: list[str]) -> str | None:
+    for alias in aliases:
+        if alias in field_map:
+            return field_map[alias]
+    return None
+
+
+def parse_owner_repo_from_value(value: str) -> tuple[str, str]:
+    text = (value or "").strip()
+    if not text:
+        return "", ""
+
+    if text.startswith("http://") or text.startswith("https://"):
+        parsed = urlparse(text)
+        parts = [part for part in parsed.path.strip("/").split("/") if part]
+        if len(parts) >= 2:
+            owner = parts[0].strip()
+            repo = parts[1].strip()
+            if repo.endswith(".git"):
+                repo = repo[:-4]
+            return owner, repo
+        return "", ""
+
+    if "/" in text:
+        owner, repo = text.split("/", 1)
+        repo = repo[:-4] if repo.endswith(".git") else repo
+        return owner.strip(), repo.strip()
+
+    return "", text
+
+
 def read_commit_jobs_from_csv(csv_path: str) -> list[dict[str, str]]:
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
 
     with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        if not reader.fieldnames:
-            raise ValueError("CSV file must include a header row.")
+        content = f.read()
 
-        field_map = {canonicalize_column_name(name): name for name in reader.fieldnames}
-        required = ["owner", "repo", "commit_sha"]
-        missing = [name for name in required if name not in field_map]
-        if missing:
-            raise ValueError(
-                "CSV file is missing required columns: "
-                + ", ".join(missing)
+    if not content.strip():
+        raise ValueError("CSV file is empty.")
+
+    try:
+        dialect = csv.Sniffer().sniff(content[:4096], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+
+    reader = csv.DictReader(io.StringIO(content), dialect=dialect)
+    if not reader.fieldnames:
+        raise ValueError("CSV file must include a header row.")
+
+    field_map = {canonicalize_column_name(name): name for name in reader.fieldnames}
+
+    owner_column = first_matching_column(field_map, ["owner", "org", "organization"])
+    repo_column = first_matching_column(field_map, ["repo", "repository", "repo_name"])
+    url_column = first_matching_column(field_map, ["url", "repo_url", "repository_url", "html_url"])
+    commit_column = first_matching_column(field_map, ["commit_sha", "commithash", "commit_hash", "sha"])
+
+    if not commit_column:
+        raise ValueError(
+            "CSV file is missing a commit column. Supported names include: "
+            "commit_sha, CommitHash, commit_hash, sha."
+        )
+
+    if not owner_column and not repo_column and not url_column:
+        raise ValueError(
+            "CSV file must include enough repository information. Supported columns include: "
+            "owner, repo, repository, url."
+        )
+
+    jobs = []
+    for row_num, row in enumerate(reader, start=2):
+        owner = (row.get(owner_column, "") or "").strip() if owner_column else ""
+        repo_value = (row.get(repo_column, "") or "").strip() if repo_column else ""
+        url_value = (row.get(url_column, "") or "").strip() if url_column else ""
+        commit_sha = (row.get(commit_column, "") or "").strip()
+
+        parsed_owner = ""
+        parsed_repo = ""
+        if repo_value:
+            parsed_owner, parsed_repo = parse_owner_repo_from_value(repo_value)
+        if not parsed_owner and not parsed_repo and url_value:
+            parsed_owner, parsed_repo = parse_owner_repo_from_value(url_value)
+
+        owner = owner or parsed_owner
+        repo = parsed_repo or repo_value
+
+        if not owner and not repo and not commit_sha and not url_value:
+            continue
+
+        if not owner or not repo or not commit_sha:
+            print(
+                f"[WARN] Skipping CSV row {row_num}: could not resolve owner, repo, "
+                "and commit SHA from the provided columns."
             )
+            continue
 
-        jobs = []
-        for row_num, row in enumerate(reader, start=2):
-            owner = (row.get(field_map["owner"], "") or "").strip()
-            repo = (row.get(field_map["repo"], "") or "").strip()
-            commit_sha = (row.get(field_map["commit_sha"], "") or "").strip()
-
-            if not owner and not repo and not commit_sha:
-                continue
-
-            if not owner or not repo or not commit_sha:
-                print(
-                    f"[WARN] Skipping CSV row {row_num}: owner, repo, and commit_sha "
-                    "must all be non-empty."
-                )
-                continue
-
-            jobs.append({
-                "owner": owner,
-                "repo": repo,
-                "commit_sha": commit_sha,
-            })
+        jobs.append({
+            "owner": owner,
+            "repo": repo,
+            "commit_sha": commit_sha,
+        })
 
     if not jobs:
         raise ValueError("No valid commit jobs found in CSV file.")
@@ -996,10 +1210,10 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
         total_unknown_dependency_count_after = sum(row.get("Unknown_Dependency_Count_After", 0) for row in summary_rows)
         total_reliability_issues_before = sum(row.get("Reliability_Issues_Before", 0) for row in summary_rows)
         total_reliability_issues_after = sum(row.get("Reliability_Issues_After", 0) for row in summary_rows)
-        total_before_density = round((total_before_smells / max(total_bloc_before, 1)) * 1000, 4)
-        total_after_density = round((total_after_smells / max(total_bloc_after, 1)) * 1000, 4)
-        total_before_security_density = round((total_before_security_smells / max(total_bloc_before, 1)) * 1000, 4)
-        total_after_security_density = round((total_after_security_smells / max(total_bloc_after, 1)) * 1000, 4)
+        total_before_density = round(total_before_smells / max(total_bloc_before, 1), 4)
+        total_after_density = round(total_after_smells / max(total_bloc_after, 1), 4)
+        total_before_security_density = round(total_before_security_smells / max(total_bloc_before, 1), 4)
+        total_after_security_density = round(total_after_security_smells / max(total_bloc_after, 1), 4)
         total_before_summary = ";".join(sorted({
             smell_id
             for row in summary_rows
@@ -1257,6 +1471,12 @@ def run_before_after_metrics(owner: str, repo: str, commit_sha: str, token: str)
         summary_rows.append(totals_row)
 
         write_summary(summary_rows)
+        write_maintainability_summary(summary_rows)
+        write_modularity_summary(summary_rows)
+        write_reliability_summary(summary_rows)
+        write_security_summary(summary_rows)
+        write_understandability_summary(summary_rows)
+        write_commit_csv_bundle(owner, repo, commit_sha, summary_rows)
         print("\nBefore/after analysis completed for all metrics and smells.")
 
     finally:

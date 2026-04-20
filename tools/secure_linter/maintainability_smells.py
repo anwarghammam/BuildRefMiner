@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -12,8 +13,6 @@ CheckFn = Callable[[Any], IssueList]
 
 
 SMELL_LABELS: dict[str, str] = {
-    "COMPLEXITY": "Complexity",
-    "DUPLICATES": "Duplicates",
     "EMPTY_INCOMPLETE_TAGS": "Empty / Incomplete Tags",
     "INCONSISTENT_DEPENDENCY_MANAGEMENT": "Inconsistent Dependency Management",
     "LACK_OF_ERROR_HANDLING": "Lack of Error Handling",
@@ -23,14 +22,28 @@ SMELL_LABELS: dict[str, str] = {
     "OUTDATED_DEPENDENCIES": "Outdated Dependencies",
 }
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+TOOLS_DIR = SCRIPT_DIR.parent
+REPO_ROOT = TOOLS_DIR.parent
+
+for path in (SCRIPT_DIR, TOOLS_DIR, REPO_ROOT):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
+
+
+def _import_secure_linter_module(module_name: str):
+    if __package__:
+        return importlib.import_module(f"{__package__}.{module_name}")
+    return importlib.import_module(module_name)
+
 
 def _checks_for_build_type(build_type: str) -> list[tuple[str, CheckFn]]:
     if build_type == "ant":
-        from . import ant_maintainability_checks as ant_checks
+        ant_checks = _import_secure_linter_module("ant_maintainability_checks")
 
         return [
-            ("COMPLEXITY", ant_checks.check_complexity),
-            ("DUPLICATES", ant_checks.check_duplicates),
+    
             ("EMPTY_INCOMPLETE_TAGS", ant_checks.check_empty_incomplete_tags),
             ("INCONSISTENT_DEPENDENCY_MANAGEMENT", ant_checks.check_inconsistent_dependency_management),
             ("LACK_OF_ERROR_HANDLING", ant_checks.check_lack_of_error_handling),
@@ -41,12 +54,10 @@ def _checks_for_build_type(build_type: str) -> list[tuple[str, CheckFn]]:
         ]
 
     if build_type == "gradle":
-        from . import gradle_security_checks as gradle_checks
+        gradle_checks = _import_secure_linter_module("gradle_security_checks")
 
         return [
-            ("COMPLEXITY", gradle_checks.check_complexity),
-            ("DUPLICATES", gradle_checks.check_duplicate_code),
-            ("DUPLICATES", gradle_checks.check_duplicate_dependencies),
+           
             ("INCONSISTENT_DEPENDENCY_MANAGEMENT", gradle_checks.check_inconsistent_version_management),
             ("LACK_OF_ERROR_HANDLING", gradle_checks.check_missing_or_improper_error_handling),
             ("MISSING_DEPENDENCY_VERSION", gradle_checks.check_missing_version_information),
@@ -57,12 +68,10 @@ def _checks_for_build_type(build_type: str) -> list[tuple[str, CheckFn]]:
         ]
 
     if build_type == "maven":
-        from . import maven_security_checks as maven_checks
+        maven_checks = _import_secure_linter_module("maven_security_checks")
 
         return [
-            ("COMPLEXITY", maven_checks.check_complex_heuristics),
-            ("DUPLICATES", maven_checks.check_duplicate_dependencies),
-            ("DUPLICATES", maven_checks.check_duplicate_plugins),
+            
             ("EMPTY_INCOMPLETE_TAGS", maven_checks.check_empty_xml_tags),
             ("INCONSISTENT_DEPENDENCY_MANAGEMENT", maven_checks.check_inconsistent_dependency_versions),
             ("INCONSISTENT_DEPENDENCY_MANAGEMENT", maven_checks.check_inconsistent_plugin_management),
@@ -88,7 +97,7 @@ def detect_build_type(file_path: str) -> str:
         return "maven"
 
     if name.endswith(".xml"):
-        from .maven_parser import parse_pom
+        parse_pom = _import_secure_linter_module("maven_parser").parse_pom
 
         root = parse_pom(str(path))
         if root is not None and "maven.apache.org/POM" in str(root.tag):
@@ -99,18 +108,18 @@ def detect_build_type(file_path: str) -> str:
 
 def _load_build_data(file_path: str, build_type: str) -> Any:
     if build_type == "ant":
-        from .ant_parser import parse_ant
+        parse_ant = _import_secure_linter_module("ant_parser").parse_ant
 
         data = parse_ant(file_path)
         if data is None:
             raise ValueError(f"Failed to parse Ant file: {file_path}")
         return data
     if build_type == "gradle":
-        from .gradle_parser import parse_gradle
+        parse_gradle = _import_secure_linter_module("gradle_parser").parse_gradle
 
         return parse_gradle(file_path)
     if build_type == "maven":
-        from .maven_parser import parse_pom
+        parse_pom = _import_secure_linter_module("maven_parser").parse_pom
 
         data = parse_pom(file_path)
         if data is None:
@@ -122,6 +131,19 @@ def _load_build_data(file_path: str, build_type: str) -> Any:
 def _count_non_empty_lines(file_path: str) -> int:
     with open(file_path, "r", encoding="utf-8", errors="ignore") as handle:
         return sum(1 for line in handle if line.strip())
+
+
+def _count_bloc(file_path: str) -> int:
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+
+        from metrics.BLOC import compute_bloc
+
+        return compute_bloc(file_path)
+    except Exception:
+        return _count_non_empty_lines(file_path)
 
 
 def _normalize_issue(smell_id: str, issue: dict[str, str]) -> dict[str, str]:
@@ -158,17 +180,17 @@ def _run_checks(data: Any, checks: list[tuple[str, CheckFn]]) -> list[dict[str, 
 
 
 def _format_result(file_path: str, build_type: str, smells: list[dict[str, str]]) -> dict[str, Any]:
-    loc = _count_non_empty_lines(file_path)
+    bloc = _count_bloc(file_path)
     smell_count = len(smells)
-    smell_summary = ";".join(sorted({smell["smell_id"] for smell in smells}))
+    #smell_summary = ";".join(sorted({smell["smell_id"] for smell in smells}))
 
     return {
         "file_path": str(Path(file_path).resolve()),
         "build_type": build_type,
         "smells": smells,
         "smell_count": smell_count,
-        "smell_density": round((smell_count / max(loc, 1)) * 1000, 4),
-        "smell_summary": smell_summary,
+        "smell_density": round(smell_count / max(bloc, 1), 4),
+        #"smell_summary": smell_summary,
     }
 
 
@@ -197,7 +219,7 @@ class MaintainabilitySmellExtractor:
             "smells": [],
             "smell_count": 0,
             "smell_density": 0.0,
-            "smell_summary": "",
+           # "smell_summary": "",
         }
 
 

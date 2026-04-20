@@ -1,0 +1,9 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,RE_Before,RE_After,DSS_Before,DSS_After,EDR_Before,EDR_After
+49cd79581fe93c2e620cb90e68c72779ed8d5706,e593ef58fcdd4eced8abc083addfcd8dd9e786c8,blessedDeps.gradle,blessedDeps.gradle,Gradle,added,0.0,1.0,0.0,0.0,0.0,0.0
+49cd79581fe93c2e620cb90e68c72779ed8d5706,e593ef58fcdd4eced8abc083addfcd8dd9e786c8,build.gradle,build.gradle,Gradle,modified,0.9273,0.9286,0.0,0.0,1.0,1.0
+49cd79581fe93c2e620cb90e68c72779ed8d5706,e593ef58fcdd4eced8abc083addfcd8dd9e786c8,epoxy-adapter/build.gradle,build.gradle,Gradle,modified,1.0,1.0,1.0,0.0,0.9444,0.5
+49cd79581fe93c2e620cb90e68c72779ed8d5706,e593ef58fcdd4eced8abc083addfcd8dd9e786c8,epoxy-annotations/build.gradle,build.gradle,Gradle,modified,1.0,1.0,0.0,0.0,1.0,1.0
+49cd79581fe93c2e620cb90e68c72779ed8d5706,e593ef58fcdd4eced8abc083addfcd8dd9e786c8,epoxy-processor/build.gradle,build.gradle,Gradle,modified,1.0,1.0,1.0,0.0,0.8333,0.5
+49cd79581fe93c2e620cb90e68c72779ed8d5706,e593ef58fcdd4eced8abc083addfcd8dd9e786c8,epoxy-processortest/build.gradle,build.gradle,Gradle,modified,0.9091,0.9091,1.0,0.0,0.8125,0.5
+49cd79581fe93c2e620cb90e68c72779ed8d5706,e593ef58fcdd4eced8abc083addfcd8dd9e786c8,epoxy-sample/build.gradle,build.gradle,Gradle,modified,1.0,1.0,1.0,0.0,0.7273,0.4
+49cd79581fe93c2e620cb90e68c72779ed8d5706,e593ef58fcdd4eced8abc083addfcd8dd9e786c8,processor/build.gradle,build.gradle,Gradle,modified,1.0,1.0,1.0,0.0,0.9333,0.6667

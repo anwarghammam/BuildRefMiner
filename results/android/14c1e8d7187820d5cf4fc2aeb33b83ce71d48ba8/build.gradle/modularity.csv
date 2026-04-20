@@ -1,0 +1,2 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,CP_Internal_Before,CP_Internal_After,CP_External_Before,CP_External_After,NCP_Internal_Before,NCP_Internal_After,NCP_External_Before,NCP_External_After,Build_Cohesion_Before,Build_Cohesion_After,Clone_Density_Before,Clone_Density_After
+14c1e8d7187820d5cf4fc2aeb33b83ce71d48ba8,78945f82d2cc3531b968e2b689ebd77c79d1de57,build.gradle,build.gradle,Gradle,modified,0,0,201,200,0.0,0.0,0.5374,0.5333,1.0,0.0,0.0,0.0

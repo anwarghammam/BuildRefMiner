@@ -1,0 +1,2 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,RE_Before,RE_After,DSS_Before,DSS_After,EDR_Before,EDR_After
+adcaeab64fb435d35f1f6e9559e591277470ef6d,50a7c87f2cd9ff2b44c59f34561706dfece0f749,javatests/artifacts/dagger/build.gradle,build.gradle,Gradle,renamed,0.0,0.9474,0.0,0.0,0.0,1.0

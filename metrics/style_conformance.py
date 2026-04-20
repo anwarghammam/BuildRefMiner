@@ -35,7 +35,7 @@ def compute_style_score(bloc, weighted_violations):
     if bloc is None or bloc <= 0:
         return None
 
-    score = 100 - ((weighted_violations / bloc) * 100)
+    score = 1 - (weighted_violations / bloc)
     return max(0.0, score)
 
 

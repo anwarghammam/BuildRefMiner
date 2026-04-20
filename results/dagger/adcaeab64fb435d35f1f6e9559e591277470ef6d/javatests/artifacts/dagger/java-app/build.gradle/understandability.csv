@@ -1,0 +1,2 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,Normalized_CC_Before,Normalized_CC_After,Normalized_HV_Before,Normalized_HV_After,Comment_Ratio_Before,Comment_Ratio_After,Comment_Readability_Before,Comment_Readability_After,Style_Conformance_Score_Before,Style_Conformance_Score_After,Clone_Density_Before,Clone_Density_After
+adcaeab64fb435d35f1f6e9559e591277470ef6d,50a7c87f2cd9ff2b44c59f34561706dfece0f749,javatests/artifacts/dagger/java-app/build.gradle,build.gradle,Gradle,renamed,0.0,0.037,0.0,12.0567,0.0,0.0312,0.0,50.97,0.0,0.85,0.0,0.0

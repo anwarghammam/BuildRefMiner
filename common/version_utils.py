@@ -5,18 +5,35 @@ import json
 import time
 import random
 import logging
-import requests
-import semantic_version
-from lxml import etree
 from typing import Optional
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
+
+try:
+    import semantic_version
+except ImportError:
+    semantic_version = None
+
+try:
+    from lxml import etree
+except ImportError:
+    etree = None
+
+try:
+    import requests
+    from urllib3.util.retry import Retry
+    from requests.adapters import HTTPAdapter
+except ImportError:
+    requests = None
+    Retry = None
+    HTTPAdapter = None
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def create_resilient_session() -> requests.Session:
+def create_resilient_session():
+    if requests is None or Retry is None or HTTPAdapter is None:
+        return None
+
     session = requests.Session()
     retry = Retry(
         total=3,
@@ -44,6 +61,9 @@ def save_cache():
         json.dump(CACHE, f)
 
 def fetch_latest_version(group: str, artifact: str) -> Optional[str]:
+    if session is None or etree is None:
+        return None
+
     key = f"{group}:{artifact}"
     if key in CACHE:
         return CACHE[key] or None
@@ -102,12 +122,18 @@ def fetch_latest_version(group: str, artifact: str) -> Optional[str]:
     return None
 
 def resilient_latest_version(group: str, artifact: str) -> Optional[str]:
+    if etree is None:
+        return None
+
     try:
         ver = fetch_latest_version(group, artifact)
         if ver:
             return ver
     except Exception:
         pass
+
+    if requests is None:
+        return None
 
     try:
         path = f"{group.replace('.', '/')}/{artifact}/maven-metadata.xml"
@@ -125,6 +151,8 @@ def resilient_latest_version(group: str, artifact: str) -> Optional[str]:
 
 def is_version_outdated(current: str, latest: str | None) -> bool:
     if not latest:
+        return False
+    if semantic_version is None:
         return False
     try:
         if current.startswith("${") and current.endswith("}"):

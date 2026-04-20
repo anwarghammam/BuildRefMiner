@@ -1,0 +1,2 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,CP_Internal_Before,CP_Internal_After,CP_External_Before,CP_External_After,NCP_Internal_Before,NCP_Internal_After,NCP_External_Before,NCP_External_After,Build_Cohesion_Before,Build_Cohesion_After,Clone_Density_Before,Clone_Density_After
+91ef8961461561a1f569f76a3d5f1603b12a2921,13916c8471abc88f662b0b447b02b5c1443547c5,storio-sqlite-annotations-processor-test/build.workaround-missing-resource.gradle,build.workaround-missing-resource.gradle,Gradle,removed,0,0,2,0,0.0,0.0,0.1667,0.0,0.0,0.0,0.0,0.0

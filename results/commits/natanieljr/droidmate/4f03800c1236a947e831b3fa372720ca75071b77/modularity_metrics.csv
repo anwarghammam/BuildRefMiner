@@ -1,0 +1,7 @@
+Commit_SHA,Parent_SHA,File_Path,File_Name,Tool,Status,CP_Internal_Before,CP_Internal_After,CP_External_Before,CP_External_After,NCP_Internal_Before,NCP_Internal_After,NCP_External_Before,NCP_External_After,Build_Cohesion_Before,Build_Cohesion_After,Clone_Density_Before,Clone_Density_After
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,build.gradle,build.gradle,Gradle,modified,0,0,16,16,0.0,0.0,0.2051,0.2025,0.0,0.0,0.078,0.0
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,buildSrc/build.gradle,build.gradle,Gradle,modified,0,0,23,22,0.0,0.0,0.4792,0.4783,0.0,0.0,0.0,0.0
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,project/deviceComponents/deviceControlDaemon/build.gradle,build.gradle,Gradle,modified,0,0,25,25,0.0,0.0,0.4098,0.4032,0.0,0.0,0.0,0.0
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,project/deviceComponents/deviceControlDaemon/settings.gradle,settings.gradle,Gradle,modified,0,0,1,1,0.0,0.0,0.0769,0.0909,0.0,0.0,0.0,0.0
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,project/pcComponents/core/build.gradle,build.gradle,Gradle,modified,0,0,45,46,0.0,0.0,0.7143,0.7188,0.0,0.0,0.0,0.0
+4f03800c1236a947e831b3fa372720ca75071b77,ad29434ac054b0c858b979801bf00a04ee977861,versions.gradle,versions.gradle,Gradle,modified,0,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
